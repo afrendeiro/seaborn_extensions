@@ -12,7 +12,7 @@ import seaborn as sns
 import pingouin as pg
 
 
-from .types import DataFrame, Axis, Figure
+from seaborn_extensions.types import DataFrame, Axis, Figure
 
 
 def add_transparency_to_boxenplot(ax: Axis) -> None:
@@ -91,6 +91,8 @@ def swarmboxenplot(
     multiple_testing: Union[bool, str] = "fdr_bh",
     test_upper_threshold: float = 0.05,
     test_lower_threshold: float = 0.01,
+    plot_non_significant: bool = False,
+    plot_kws: Optional[Dict[str, Any]] = None,
     test_kws: Optional[Dict[str, Any]] = None,
 ) -> Optional[Union[Figure, DataFrame, Tuple[Figure, DataFrame]]]:
     """
@@ -113,17 +115,19 @@ def swarmboxenplot(
     """
     if test_kws is None:
         test_kws = dict()
+    if plot_kws is None:
+        plot_kws = dict()
 
     if ax is None:
         fig, _ax = plt.subplots(1, 1, figsize=(4, 4))
     else:
         _ax = ax
     if boxen:
-        sns.boxenplot(data=data, x=x, y=y, hue=hue, ax=_ax)
+        sns.boxenplot(data=data, x=x, y=y, hue=hue, ax=_ax, **plot_kws)
     if boxen and swarm:
         add_transparency_to_boxenplot(_ax)
     if swarm:
-        sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax)
+        sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **plot_kws)
     _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90)
 
     if test:
@@ -139,7 +143,6 @@ def swarmboxenplot(
         stat = pd.DataFrame(
             itertools.combinations(data[x].unique(), 2), columns=["A", "B"]
         )
-        stat["p-unc"] = np.nan
         try:
             stat = pg.pairwise_ttests(data=data, dv=y, between=x, **test_kws)
         except (AssertionError, ValueError) as e:
@@ -147,22 +150,44 @@ def swarmboxenplot(
         except KeyError:
             print("Only one category with values!")
         if multiple_testing is not False:
+            if "p-unc" not in stat.columns:
+                stat["p-unc"] = np.nan
             stat["p-cor"] = pg.multicomp(
                 stat["p-unc"].values, method=multiple_testing
             )[1]
             pcol = "p-cor"
         else:
             pcol = "p-unc"
-        for i, (idx, row) in enumerate(
-            stat.loc[stat[pcol] <= test_upper_threshold, :].iterrows()
-        ):
-            symbol = "**" if row[pcol] <= test_lower_threshold else "*"
+
+        # This ensures there is a point for each `x` class and keeps the order
+        # correct for below
+        # TODO: check for hue usage
+        mm = data.groupby(x).median()
+        order = stat[["A", "B"]].stack().unique()
+        mm = mm.loc[order]  # sort by order
+        _ax.scatter(mm.index, mm, alpha=0, color="white")
+
+        i = 0
+        for idx, row in stat.iterrows():
+            p = row[pcol]
+            if (pd.isnull(p) or (p > test_upper_threshold)) and (
+                not plot_non_significant
+            ):
+                continue
+            symbol = (
+                "**"
+                if p <= test_lower_threshold
+                else "n.s."
+                if ((p > test_upper_threshold) or pd.isnull(p))
+                else "*"
+            )
             # py = data[y].quantile(0.95) - (i * (ylength / 20))
-            py = data[y].max() - (i * (ylength / 20))
+            py = data[y].max() - (i * (ylength / 50))
             _ax.plot(
                 (row["A"], row["B"]), (py, py), color="black", linewidth=1.2
             )
             _ax.text(row["B"], py, s=symbol, color="black")
+            i += 1
         _ax.set_ylim(ylim)
         return (fig, stat) if ax is None else stat
     return fig if ax is None else None

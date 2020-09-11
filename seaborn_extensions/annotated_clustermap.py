@@ -289,5 +289,5 @@ def colorbar_decorator(f: Callable) -> Callable:
     return clustermap
 
 
-def clustermap():
-    return colorbar_decorator(sns.clustermap)
+def activate():
+    sns.clustermap = colorbar_decorator(sns.clustermap)
