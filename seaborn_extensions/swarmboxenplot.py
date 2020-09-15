@@ -162,7 +162,7 @@ def swarmboxenplot(
         # This ensures there is a point for each `x` class and keeps the order
         # correct for below
         # TODO: check for hue usage
-        mm = data.groupby(x).median()
+        mm = data.groupby(x)[y].median()
         order = stat[["A", "B"]].stack().unique()
         mm = mm.loc[order]  # sort by order
         _ax.scatter(mm.index, mm, alpha=0, color="white")
