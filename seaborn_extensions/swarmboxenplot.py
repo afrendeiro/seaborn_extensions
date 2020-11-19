@@ -127,6 +127,8 @@ def swarmboxenplot(
     if boxen and swarm:
         add_transparency_to_boxenplot(_ax)
     if swarm:
+        if hue is not None and "dodge" not in plot_kws:
+            plot_kws["dodge"] = True
         sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **plot_kws)
     _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90)
 
@@ -144,7 +146,12 @@ def swarmboxenplot(
             itertools.combinations(data[x].unique(), 2), columns=["A", "B"]
         )
         try:
-            stat = pg.pairwise_ttests(data=data, dv=y, between=x, **test_kws)
+            stat = pg.pairwise_ttests(
+                data=data,
+                dv=y,
+                between=x if hue is None else [x, hue],
+                **test_kws
+            )
         except (AssertionError, ValueError) as e:
             print(str(e))
         except KeyError:
@@ -161,10 +168,10 @@ def swarmboxenplot(
 
         # This ensures there is a point for each `x` class and keeps the order
         # correct for below
-        # TODO: check for hue usage
+        # TODO: fix plotting of significance lines with `hue` is used.
         mm = data.groupby(x)[y].median()
         order = stat[["A", "B"]].stack().unique()
-        mm = mm.loc[order]  # sort by order
+        mm = mm.reindex(order)  # sort by order
         _ax.scatter(mm.index, mm, alpha=0, color="white")
 
         i = 0
