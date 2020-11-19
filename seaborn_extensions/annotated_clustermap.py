@@ -63,16 +63,17 @@ SEQUENCIAL_CMAPS = [
 
 
 def is_numeric(x: Series) -> bool:
-    if x.dtype in [
+    if x.dtype.name in [
         "float",
         "float32",
         "float64",
         "int",
         "int32",
         "int64",
+        "Int64",
     ] or is_datetime(x):
         return True
-    if (x.dtype in ["object"]) or isinstance(x.dtype, pd.CategoricalDtype):
+    if x.dtype.name in ["object", "boolean", "bool", "category"]:
         return False
     raise ValueError(f"Cannot transfer data type '{x.dtype}' to color!")
 
