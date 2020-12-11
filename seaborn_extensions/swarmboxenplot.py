@@ -97,7 +97,7 @@ def swarmboxenplot(
         # "close" excess subplots
         for ax in axes.flatten()[i + 1 :]:
             ax.axis("off")
-        stats = pd.concat(_stats)
+        stats = pd.concat(_stats).reset_index(drop=True)
         stats = stats.reindex(["Variable"] + s.columns.tolist(), axis=1)
         return fig, stats
 
