@@ -328,7 +328,10 @@ def colorbar_decorator(f: Callable) -> Callable:
                 if kwargs["config"].lower() in ["z", "z_score", "z-score"]
                 else nz_default_kws
             )
-            kwargs.update(default_kws)
+            # kwargs.update(default_kws)  # for overwrite
+            for k, v in default_kws.items():
+                if k not in kwargs:
+                    kwargs[k] = v
             del kwargs["config"]
 
         # Annotations:
