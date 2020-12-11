@@ -1,7 +1,7 @@
 """Main module."""
 
 
-from typing import Any, Tuple, Union, Dict, Literal, Optional, overload
+from typing import Any, Tuple, Union, Dict, Optional, Collection
 import itertools
 
 import numpy as np
@@ -13,76 +13,23 @@ import pingouin as pg
 
 
 from seaborn_extensions.types import DataFrame, Axis, Figure
+from seaborn_extensions.utils import get_grid_dims
 
 
-def add_transparency_to_boxenplot(ax: Axis) -> None:
+def add_transparency_to_boxenplot(ax: Axis, alpha: float = 0.25) -> None:
     patches = (
         matplotlib.collections.PatchCollection,
         matplotlib.collections.PathCollection,
     )
-    [x.set_alpha(0.25) for x in ax.get_children() if isinstance(x, patches)]
-
-
-@overload
-def swarmboxenplot(
-    data: DataFrame,
-    x: str,
-    y: str,
-    hue: Optional[str] = None,
-    swarm: bool = True,
-    boxen: bool = True,
-    ax: None = None,
-    test: Literal[False] = False,
-) -> Figure:
-    ...
-
-
-@overload
-def swarmboxenplot(
-    data: DataFrame,
-    x: str,
-    y: str,
-    hue: Optional[str] = None,
-    swarm: bool = True,
-    boxen: bool = True,
-    ax: Axis = Axis,
-    test: Literal[False] = False,
-) -> None:
-    ...
-
-
-@overload
-def swarmboxenplot(
-    data: DataFrame,
-    x: str,
-    y: str,
-    hue: Optional[str] = None,
-    swarm: bool = True,
-    boxen: bool = True,
-    ax: None = None,
-    test: Literal[True] = True,
-) -> Tuple[Figure, DataFrame]:
-    ...
-
-
-@overload
-def swarmboxenplot(
-    data: DataFrame,
-    x: str,
-    y: str,
-    hue: Optional[str] = None,
-    swarm: bool = True,
-    boxen: bool = True,
-    ax: Axis = Axis,
-    test: Literal[True] = True,
-) -> DataFrame:
-    ...
+    for x in ax.get_children():
+        if isinstance(x, patches):
+            x.set_alpha(alpha)
 
 
 def swarmboxenplot(
     data: DataFrame,
     x: str,
-    y: str,
+    y: Union[str, Collection] = None,
     hue: Optional[str] = None,
     swarm: bool = True,
     boxen: bool = True,
@@ -102,21 +49,57 @@ def swarmboxenplot(
         [np.random.random(20), np.random.choice(['a', 'b'], 20)],
         index=['cont', 'cat']).T.convert_dtypes()
     data.loc[data['cat'] == 'b', 'cont'] *= 5
-    fig = swarmboxenplot(data=data, x='cat', y='cont')
+    fig, stats = swarmboxenplot(data=data, x='cat', y='cont')
 
 
-    data = pd.DataFrame(
-        [np.random.random(40), np.random.choice(['a', 'b', 'c'], 40)],
-        index=['cont', 'cat']).T.convert_dtypes()
-    data.loc[data['cat'] == 'b', 'cont'] *= 5
-    data.loc[data['cat'] == 'c', 'cont'] -= 5
-    fig = swarmboxenplot(data=data, x='cat', y='cont', test_kws=dict(parametric=True))
+    data = pd.DataFrame({
+        "x": pd.Categorical(
+            np.random.choice(['a', 'b', 'c'], 100),
+            categories=['a', 'b', 'c'], ordered=True),
+        "y1": np.random.normal(size=100),
+        "y2": np.random.random(size=100)})
+    data.loc[data['x'] == 'b', 'y1'] + 3
+    data.loc[data['x'] == 'c', 'y1'] -= 2
+    data.loc[data['x'] == 'b', 'y2'] *= 2
+    data.loc[data['x'] == 'c', 'y2'] *= -2
+    fig, stats = swarmboxenplot(data=data, x='x', y=['y1', 'y2'], test_kws=dict(parametric=False))
 
     """
     if test_kws is None:
         test_kws = dict()
     if plot_kws is None:
         plot_kws = dict()
+
+    if isinstance(y, (list, np.ndarray, pd.Series, pd.Index)):
+        n, m = get_grid_dims(y)
+        fig, axes = plt.subplots(n, m, figsize=(m * 4, n * 4), sharex=True)
+        _stats = list()
+        for i, _var in enumerate(y):
+            _ax = axes.flatten()[i]
+            s: DataFrame = swarmboxenplot(
+                data=data,
+                x=x,
+                y=_var,
+                hue=hue,
+                swarm=swarm,
+                boxen=boxen,
+                ax=_ax,
+                test=test,
+                multiple_testing=multiple_testing,
+                test_upper_threshold=test_upper_threshold,
+                test_lower_threshold=test_lower_threshold,
+                plot_non_significant=plot_non_significant,
+                plot_kws=plot_kws,
+                test_kws=test_kws,
+            )
+            _ax.set(title=_var, xlabel=None, ylabel=None)
+            _stats.append(s.assign(Variable=_var))
+        # "close" excess subplots
+        for ax in axes.flatten()[i + 1 :]:
+            ax.axis("off")
+        stats = pd.concat(_stats)
+        stats = stats.reindex(["Variable"] + s.columns.tolist(), axis=1)
+        return fig, stats
 
     if ax is None:
         fig, _ax = plt.subplots(1, 1, figsize=(4, 4))
@@ -174,6 +157,7 @@ def swarmboxenplot(
         mm = mm.reindex(order)  # sort by order
         _ax.scatter(mm.index, mm, alpha=0, color="white")
 
+        # Plot significance bars
         i = 0
         for idx, row in stat.iterrows():
             p = row[pcol]
@@ -189,7 +173,7 @@ def swarmboxenplot(
                 else "*"
             )
             # py = data[y].quantile(0.95) - (i * (ylength / 20))
-            py = data[y].max() - (i * (ylength / 50))
+            py = data[y].max() - (i * (ylength / 100))
             _ax.plot(
                 (row["A"], row["B"]), (py, py), color="black", linewidth=1.2
             )
