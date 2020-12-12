@@ -4,23 +4,36 @@
 
 from setuptools import setup, find_packages
 
+
+def parse_requirements(req_file):
+    """Parse requirements.txt files."""
+    reqs = open(req_file).read().strip().split("\n")
+    reqs = [r for r in reqs if not r.startswith("#")]
+    return [r for r in reqs if "#egg=" not in r]
+
+
+REQUIREMENTS_FILE = "requirements.txt"
+DEV_REQUIREMENTS_FILE = "requirements_dev.txt"
+README_FILE = "README.md"
+
+# Requirements
+requirements = parse_requirements(REQUIREMENTS_FILE)
+requirements_dev = parse_requirements(DEV_REQUIREMENTS_FILE)
+
 with open("README.rst") as readme_file:
     readme = readme_file.read()
 
 with open("CHANGELOG.rst") as changelog_file:
     changelog = changelog_file.read()
 
-requirements = ["numpy", "pandas", "matplotlib", "seaborn", "pingouin"]
-
-setup_requirements = [
-    "pytest-runner",
-]
-
-test_requirements = [
-    "pytest>=3",
-]
-
 setup(
+    name="seaborn_extensions",
+    package="seaborn_extensions",
+    packages=find_packages(),
+    use_scm_version={
+        "write_to": "seaborn_extensions/_version.py",
+        "write_to_template": '__version__ = "{version}"\n',
+    },
     author="Andre Rendeiro",
     author_email="afrendeiro@gmail.com",
     python_requires=">=3.5",
@@ -30,25 +43,24 @@ setup(
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Natural Language :: English",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
     ],
     description="Extensions of seaborn plots for biology",
-    install_requires=requirements,
     license="GNU General Public License v3",
     long_description=readme + "\n\n" + changelog,
     include_package_data=True,
     keywords="seaborn_extensions",
-    name="seaborn_extensions",
-    packages=find_packages(
-        include=["seaborn_extensions", "seaborn_extensions.*"]
-    ),
-    setup_requires=setup_requirements,
-    test_suite="tests",
-    tests_require=test_requirements,
+    setup_requires=["setuptools_scm"],
+    install_requires=requirements,
+    tests_require=requirements_dev,
+    extras_require={"dev": requirements_dev},
     url="https://github.com/afrendeiro/seaborn_extensions",
-    version="0.1.0",
+    project_urls={
+        "Bug Tracker": "https://github.com/afrendeiro/seaborn_extensions/issues",
+        # "Documentation": "https://seaborn_extensions.readthedocs.io",
+        "Source Code": "https://github.com/afrendeiro/seaborn_extensions",
+    },
     zip_safe=False,
 )
