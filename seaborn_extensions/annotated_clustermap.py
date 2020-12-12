@@ -1,5 +1,6 @@
 from typing import Optional, List, Union, Callable
 from functools import wraps
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -259,142 +260,160 @@ def _add_colorbars(
         )
 
 
+def clustermap(*args, **kwargs):
+    # Defaults
+
+    # # Size of figure
+    if "figsize" not in kwargs:
+        kwargs["figsize"] = (10, 10)
+    if kwargs["figsize"] == (10, 10):  # default value
+        # assumes pivot_kws is not used...
+        # would depend on x/y-ticklabel size...
+        ...
+
+    # # Decide if labeling x/y-ticklabels based on shape
+    max_items = 200
+    data = args[0]
+    if "xticklabels" not in kwargs:
+        kwargs["xticklabels"] = True if data.shape[0] < max_items else False
+    if "yticklabels" not in kwargs:
+        kwargs["yticklabels"] = True if data.shape[1] < max_items else False
+
+    # dendrogram aspect ratio
+    d = 0.1
+    aspect = kwargs["figsize"][0] / kwargs["figsize"][1]
+    smallest = (
+        np.argmin(kwargs["figsize"])
+        if len(np.unique(kwargs["figsize"])) > 1
+        else -1
+    )
+    if smallest == -1:
+        s = 1
+        dar = (d, d)
+    else:
+        s = kwargs["figsize"][smallest] * d
+        dar = tuple(
+            [d if i == smallest else s / kwargs["figsize"][i] for i in range(2)]
+        )
+
+    if "cbar_kws" not in kwargs:
+        kwargs["cbar_kws"] = dict()
+
+    if smallest == 0:
+        kwargs["cbar_kws"].update(dict(aspect=20 / aspect))
+
+    # # non-Z-score mode:
+    nz_default_kws = dict(
+        cmap="Reds", robust=True, dendrogram_ratio=dar, metric="correlation"
+    )
+    # # Z-score mode:
+    zs_default_kws = dict(
+        z_score=1,
+        center=0,
+        cmap="RdBu_r",
+        robust=True,
+        dendrogram_ratio=dar,
+        metric="correlation",
+    )
+    if "config" in kwargs:
+        default_kws = (
+            zs_default_kws
+            if kwargs["config"].lower() in ["z", "zscore", "z_score", "z-score"]
+            else nz_default_kws
+        )
+        # kwargs.update(default_kws)  # for overwrite
+        for k, v in default_kws.items():
+            if k not in kwargs:
+                kwargs[k] = v
+        del kwargs["config"]
+
+    # Annotations:
+    cmaps = {"row": None, "col": None}
+    # # capture "row_cmaps" and "col_cmaps" out of the kwargs
+    for arg in ["row", "col"]:
+        if arg + "_colors_cmaps" in kwargs:
+            # TODO: make sure this matches in type/length the row/col_colors kwargs.
+            cmaps[arg] = kwargs[arg + "_colors_cmaps"]
+            del kwargs[arg + "_colors_cmaps"]
+
+    # # get dataframe with colors and respective colormaps for rows and cols
+    # # instead of the original numerical values
+    _kwargs = dict(rows=None, cols=None)
+    for arg in ["row", "col"]:
+        if arg + "_colors" in kwargs:
+            if isinstance(kwargs[arg + "_colors"], (pd.DataFrame, pd.Series)):
+                _kwargs[arg + "s"] = kwargs[arg + "_colors"]
+                kwargs[arg + "_colors"] = to_color_dataframe(
+                    x=kwargs[arg + "_colors"],
+                    cmaps=cmaps[arg],
+                    offset=1 if arg == "row" else 0,
+                )
+
+    # Call original function
+    grid = sns.clustermap(*args, **kwargs)
+
+    # Add the colorbar legends to the figure
+    _add_colorbars(
+        grid, **_kwargs, row_cmaps=cmaps["row"], col_cmaps=cmaps["col"]
+    )
+    # Some nicities
+    if grid.ax_heatmap.get_xlabel() in ["", None]:
+        grid.ax_heatmap.set_xlabel(f"(n = {data.shape[0]})")
+    if grid.ax_heatmap.get_ylabel() in ["", None]:
+        grid.ax_heatmap.set_ylabel(f"(n = {data.shape[1]})")
+    return grid
+
+
+# TODO: edit original seaborn.clustermap docstring to document {row,col}_colors_cmaps arguments.
+docs = sns.clustermap.__doc__
+
+start1_docs = "pivot_kws : "
+end1_docs = "method : "
+start1 = docs.index(start1_docs)
+end1 = docs.index(end1_docs)
+add_docs1 = """config : str, optional
+        EXTENSION!
+        One of two pre-defined configurations: "abs", "zscore".
+        These two configurations provide custom default keyword arguments
+        compared with the native seaborn function and several adjustments to
+        figure and axis sizes, labels and other objects.
+         - "abs": good for non-negative data.
+         - "zscore": good for real data with variables with very different means.
+    """
+
+
+start2_docs = "{row,col}_colors : "
+end2_docs = "mask : boolean"
+start2 = docs.index(start2_docs)
+end2 = docs.index(end2_docs)
+add_docs2 = """{row,col}_colors : list-like or pandas DataFrame/Series, optional
+        EXTENSION!
+        List of colors to label for either the rows or columns. Useful to
+        evaluate whether samples within a group are clustered together. Can
+        use nested lists or DataFrame for multiple color levels of labeling.
+        If given as a DataFrame or Series, labels for the colors are extracted
+        from the DataFrames column names or from the name of the Series.
+        DataFrame/Series colors are also matched to the data by their
+        index, ensuring colors are drawn in the correct order.
+
+        TODO: complete defining new behavious
+    {row,col}_colors_cmaps:
+        EXTENSION!
+        TODO: describe
+    """
+
+
+clustermap.__doc__ = (
+    docs[:start1] + add_docs1 + docs[end1:start2] + add_docs2 + docs[end2:]
+)
+
+
 def colorbar_decorator(f: Callable) -> Callable:
     """
     Decorate seaborn.clustermap in order to have numeric values passed to the
     ``row_colors`` and ``col_colors`` arguments translated into row and column
     annotations and in addition colorbars for the restpective values.
     """
-
-    def clustermap(*args, **kwargs):
-        # Defaults
-
-        # # Size of figure
-        if "figsize" not in kwargs:
-            kwargs["figsize"] = (10, 10)
-        if kwargs["figsize"] == (10, 10):  # default value
-            # assumes pivot_kws is not used...
-            # would depend on x/y-ticklabel size...
-            ...
-
-        # # Decide if labeling x/y-ticklabels based on shape
-        max_items = 200
-        data = args[0]
-        if "xticklabels" not in kwargs:
-            kwargs["xticklabels"] = True if data.shape[0] < max_items else False
-        if "yticklabels" not in kwargs:
-            kwargs["yticklabels"] = True if data.shape[1] < max_items else False
-
-        # dendrogram aspect ratio
-        d = 0.1
-        aspect = kwargs["figsize"][0] / kwargs["figsize"][1]
-        smallest = (
-            np.argmin(kwargs["figsize"])
-            if len(np.unique(kwargs["figsize"])) > 1
-            else -1
-        )
-        if smallest == -1:
-            s = 1
-            dar = (d, d)
-        else:
-            s = kwargs["figsize"][smallest] * d
-            dar = tuple(
-                [
-                    d if i == smallest else s / kwargs["figsize"][i]
-                    for i in range(2)
-                ]
-            )
-
-        if "cbar_kws" not in kwargs:
-            kwargs["cbar_kws"] = dict()
-
-        if smallest == 0:
-            kwargs["cbar_kws"].update(dict(aspect=20 / aspect))
-
-        # # non-Z-score mode:
-        nz_default_kws = dict(dendrogram_ratio=dar, metric="correlation")
-        # # Z-score mode:
-        zs_default_kws = dict(
-            z_score=1,
-            center=0,
-            cmap="RdBu_r",
-            robust=True,
-            dendrogram_ratio=dar,
-            metric="correlation",
-        )
-        if "config" in kwargs:
-            default_kws = (
-                zs_default_kws
-                if kwargs["config"].lower() in ["z", "z_score", "z-score"]
-                else nz_default_kws
-            )
-            # kwargs.update(default_kws)  # for overwrite
-            for k, v in default_kws.items():
-                if k not in kwargs:
-                    kwargs[k] = v
-            del kwargs["config"]
-
-        # Annotations:
-        cmaps = {"row": None, "col": None}
-        # # capture "row_cmaps" and "col_cmaps" out of the kwargs
-        for arg in ["row", "col"]:
-            if arg + "_colors_cmaps" in kwargs:
-                # TODO: make sure this matches in type/length the row/col_colors kwargs.
-                cmaps[arg] = kwargs[arg + "_colors_cmaps"]
-                del kwargs[arg + "_colors_cmaps"]
-
-        # # get dataframe with colors and respective colormaps for rows and cols
-        # # instead of the original numerical values
-        _kwargs = dict(rows=None, cols=None)
-        for arg in ["row", "col"]:
-            if arg + "_colors" in kwargs:
-                if isinstance(
-                    kwargs[arg + "_colors"], (pd.DataFrame, pd.Series)
-                ):
-                    _kwargs[arg + "s"] = kwargs[arg + "_colors"]
-                    kwargs[arg + "_colors"] = to_color_dataframe(
-                        x=kwargs[arg + "_colors"],
-                        cmaps=cmaps[arg],
-                        offset=1 if arg == "row" else 0,
-                    )
-
-        # Call original function
-        grid = f(*args, **kwargs)
-
-        # Add the colorbar legends to the figure
-        _add_colorbars(
-            grid, **_kwargs, row_cmaps=cmaps["row"], col_cmaps=cmaps["col"]
-        )
-        # Some nicities
-        if grid.ax_heatmap.get_xlabel() in ["", None]:
-            grid.ax_heatmap.set_xlabel(f"(n = {data.shape[0]})")
-        if grid.ax_heatmap.get_ylabel() in ["", None]:
-            grid.ax_heatmap.set_ylabel(f"(n = {data.shape[1]})")
-        return grid
-
-    # TODO: edit original seaborn.clustermap docstring to document {row,col}_colors_cmaps arguments.
-    start_docs = "{row,col}_colors : "
-    end_docs = "mask : boolean"
-    add_docs = """{row,col}_colors : list-like or pandas DataFrame/Series, optional
-            List of colors to label for either the rows or columns. Useful to
-            evaluate whether samples within a group are clustered together. Can
-            use nested lists or DataFrame for multiple color levels of labeling.
-            If given as a DataFrame or Series, labels for the colors are extracted
-            from the DataFrames column names or from the name of the Series.
-            DataFrame/Series colors are also matched to the data by their
-            index, ensuring colors are drawn in the correct order.
-
-            TODO: complete defining new behavious
-        {row,col}_colors_cmaps:
-            TODO: describe
-        """
-
-    docs = sns.clustermap.__doc__
-    a = docs.index(start_docs)
-    o = docs.index(end_docs)
-
-    clustermap.__doc__ = docs[:a] + add_docs + docs[o:]
-
     # Add a flag
     f.decorated = True
 
@@ -402,5 +421,9 @@ def colorbar_decorator(f: Callable) -> Callable:
 
 
 def activate():
+    warnings.warn(
+        "Decoration of native searborn.clustermap function will be deprecated in version 1.0.0, use 'from seaborn_extensions import clustermap' instead.",
+        PendingDeprecationWarning,
+    )
     if sns.clustermap.__module__ != "seaborn_extensions.annotated_clustermap":
         sns.clustermap = colorbar_decorator(sns.clustermap)
