@@ -8,8 +8,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from .types import Series, DataFrame
-from .utils import minmax_scale
+from seaborn_extensions.types import Series, DataFrame
+from seaborn_extensions.utils import minmax_scale
 
 
 DEFAULT_CHANNEL_COLORS = [
@@ -383,7 +383,7 @@ add_docs1 = """config : str, optional
 
 
 start2_docs = "{row,col}_colors : "
-end2_docs = "mask : boolean"
+end2_docs = "mask : bool"
 start2 = docs.index(start2_docs)
 end2 = docs.index(end2_docs)
 add_docs2 = """{row,col}_colors : list-like or pandas DataFrame/Series, optional

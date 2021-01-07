@@ -1,12 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from seaborn_extensions.types import Figure
+from seaborn_extensions.types import Figure, DataFrame
 from seaborn_extensions.utils import get_grid_dims
 
 
 def volcano_plot(
-    stats,
+    stats: DataFrame,
     annotate_text: bool = True,
     diff_threshold: float = 0.05,
     n_top: int = None,
