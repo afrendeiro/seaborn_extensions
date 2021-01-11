@@ -51,18 +51,21 @@ def swarmboxenplot(
     data.loc[data['cat'] == 'b', 'cont'] *= 5
     fig, stats = swarmboxenplot(data=data, x='cat', y='cont')
 
-
     data = pd.DataFrame({
         "x": pd.Categorical(
             np.random.choice(['a', 'b', 'c'], 100),
             categories=['a', 'b', 'c'], ordered=True),
         "y1": np.random.normal(size=100),
-        "y2": np.random.random(size=100)})
-    data.loc[data['x'] == 'b', 'y1'] + 3
+        "y2": np.random.random(size=100),
+        "y3": np.random.random(size=100)})[::-1]
+    data.loc[data['x'] == 'b', 'y1'] += 3
     data.loc[data['x'] == 'c', 'y1'] -= 2
     data.loc[data['x'] == 'b', 'y2'] *= 2
     data.loc[data['x'] == 'c', 'y2'] *= -2
-    fig, stats = swarmboxenplot(data=data, x='x', y=['y1', 'y2'], test_kws=dict(parametric=False))
+    data.loc[data['x'] == 'c', 'y3'] -= 5
+    data.loc[data['x'] == 'b', 'y3'] = np.nan
+    fig, stats = swarmboxenplot(data=data, x='x', y=['y1', 'y2', 'y3'], test_kws=dict(parametric=False))
+
 
     """
     if test_kws is None:
@@ -117,20 +120,20 @@ def swarmboxenplot(
 
     if test:
         # remove NaNs
-        data = data.dropna(subset=[x, y])
+        datat = data.dropna(subset=[x, y])
         # remove categories with only one element
-        keep = data.groupby(x).size()[data.groupby(x).size() > 1].index
-        data = data.loc[data[x].isin(keep), :]
-        if data[x].dtype.name == "category":
-            data[x] = data[x].cat.remove_unused_categories()
+        keep = datat.groupby(x).size()[datat.groupby(x).size() > 1].index
+        datat = datat.loc[datat[x].isin(keep), :]
+        if datat[x].dtype.name == "category":
+            datat[x] = datat[x].cat.remove_unused_categories()
         ylim = _ax.get_ylim()
         ylength = abs(ylim[1]) + abs(ylim[0])
         stat = pd.DataFrame(
-            itertools.combinations(data[x].unique(), 2), columns=["A", "B"]
+            itertools.combinations(datat[x].unique(), 2), columns=["A", "B"]
         )
         try:
             stat = pg.pairwise_ttests(
-                data=data,
+                data=datat,
                 dv=y,
                 between=x if hue is None else [x, hue],
                 **test_kws
@@ -149,13 +152,11 @@ def swarmboxenplot(
         else:
             pcol = "p-unc"
 
-        # This ensures there is a point for each `x` class and keeps the order
+        # This ensures there is a point for each `x` class and keep the order
         # correct for below
-        # TODO: fix plotting of significance lines with `hue` is used.
         mm = data.groupby(x)[y].median()
-        order = stat[["A", "B"]].stack().unique()
-        mm = mm.reindex(order)  # sort by order
         _ax.scatter(mm.index, mm, alpha=0, color="white")
+        order = {k: i for i, k in enumerate(mm.index)}
 
         # Plot significance bars
         i = 0
@@ -175,9 +176,12 @@ def swarmboxenplot(
             # py = data[y].quantile(0.95) - (i * (ylength / 20))
             py = data[y].max() - (i * (ylength / 100))
             _ax.plot(
-                (row["A"], row["B"]), (py, py), color="black", linewidth=1.2
+                (order[row["A"]], order[row["B"]]),
+                (py, py),
+                color="black",
+                linewidth=1.2,
             )
-            _ax.text(row["B"], py, s=symbol, color="black")
+            _ax.text(order[row["B"]], py, s=symbol, color="black")
             i += 1
         _ax.set_ylim(ylim)
         return (fig, stat) if ax is None else stat
