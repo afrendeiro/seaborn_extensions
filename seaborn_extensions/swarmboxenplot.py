@@ -3,6 +3,7 @@
 
 from typing import Any, Tuple, Union, Dict, Optional, Collection
 import itertools
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -50,6 +51,19 @@ def swarmboxenplot(
         index=['cont', 'cat']).T.convert_dtypes()
     data.loc[data['cat'] == 'b', 'cont'] *= 5
     fig, stats = swarmboxenplot(data=data, x='cat', y='cont')
+
+    data = pd.DataFrame({
+        "x": pd.Categorical(
+            np.random.choice(['a', 'b', 'c'], 100),
+            categories=['a', 'b', 'c'], ordered=True),
+        "h": pd.Categorical(
+            np.random.choice(['p', 'q', 'r', 'w'], 100),
+            categories=['p', 'q', 'r', 'w'], ordered=True),
+        "y": np.random.random(size=100)})
+    data.loc[data['x'] == 'b', 'y'] += 1
+    data.loc[data['x'] == 'c', 'y'] -= 1.5
+    data.loc[(data['x'] == 'c') & (data['h'] == 'p'), 'y'] *= 2.5
+    fig, stats = swarmboxenplot(data=data, x='x', y='y', hue='h', test_kws=dict(parametric=False))
 
     data = pd.DataFrame({
         "x": pd.Categorical(
@@ -115,7 +129,9 @@ def swarmboxenplot(
     if swarm:
         if hue is not None and "dodge" not in plot_kws:
             plot_kws["dodge"] = True
-        sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **plot_kws)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **plot_kws)
     _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90)
 
     if test:
@@ -154,9 +170,16 @@ def swarmboxenplot(
 
         # This ensures there is a point for each `x` class and keep the order
         # correct for below
-        mm = data.groupby(x)[y].median()
-        _ax.scatter(mm.index, mm, alpha=0, color="white")
-        order = {k: i for i, k in enumerate(mm.index)}
+        mm = data.groupby([x] + ([hue] if hue is not None else []))[y].median()
+        if hue is None:
+            order = {k: float(i) for i, k in enumerate(mm.index)}
+        else:
+            nhues = len(np.unique(data[hue]))
+            order = {
+                k: (float(i) / nhues) - (1 / nhues) - 0.05
+                for i, k in enumerate(mm.index)
+            }
+        _ax.scatter(order.values(), mm, alpha=0, color="white")
 
         # Plot significance bars
         i = 0
@@ -165,6 +188,7 @@ def swarmboxenplot(
             if (pd.isnull(p) or (p > test_upper_threshold)) and (
                 not plot_non_significant
             ):
+                i += 1
                 continue
             symbol = (
                 "**"
@@ -175,13 +199,26 @@ def swarmboxenplot(
             )
             # py = data[y].quantile(0.95) - (i * (ylength / 20))
             py = data[y].max() - (i * (ylength / 100))
+
+            if hue is not None:
+                if row[x] != "-":
+                    xx = (order[(row[x], row["A"])], order[(row[x], row["B"])])
+                else:
+                    # TODO: get middle
+                    xx = (
+                        order[(row["A"], stat["A"].iloc[-1])] - (1 / nhues),
+                        order[(row["B"], stat["B"].iloc[-1])] - (1 / nhues),
+                    )
+            else:
+                xx = (order[row["A"]], order[row["B"]])
+
             _ax.plot(
-                (order[row["A"]], order[row["B"]]),
+                xx,
                 (py, py),
                 color="black",
                 linewidth=1.2,
             )
-            _ax.text(order[row["B"]], py, s=symbol, color="black")
+            _ax.text(xx[1], py, s=symbol, color="black", ha="center")
             i += 1
         _ax.set_ylim(ylim)
         return (fig, stat) if ax is None else stat
