@@ -1,7 +1,8 @@
 """Main module."""
 
 
-from typing import Any, Tuple, Union, Dict, Optional, Collection
+from typing import Any, Tuple, Union, Dict, Optional
+from collections.abc import MutableSequence
 import itertools
 import warnings
 
@@ -30,7 +31,7 @@ def add_transparency_to_boxenplot(ax: Axis, alpha: float = 0.25) -> None:
 def swarmboxenplot(
     data: DataFrame,
     x: str,
-    y: Union[str, Collection] = None,
+    y: Union[str, MutableSequence],
     hue: Optional[str] = None,
     swarm: bool = True,
     boxen: bool = True,
@@ -63,7 +64,10 @@ def swarmboxenplot(
     data.loc[data['x'] == 'b', 'y'] += 1
     data.loc[data['x'] == 'c', 'y'] -= 1.5
     data.loc[(data['x'] == 'c') & (data['h'] == 'p'), 'y'] *= 2.5
-    fig, stats = swarmboxenplot(data=data, x='x', y='y', hue='h', test_kws=dict(parametric=False))
+    fig, stats = swarmboxenplot(
+        data=data, x='x', y='y', hue='h', test_kws=dict(parametric=False))
+    fig, stats = swarmboxenplot(
+        data=data, x='h', y='y', hue='x', test_kws=dict(parametric=False))
 
     data = pd.DataFrame({
         "x": pd.Categorical(
@@ -80,19 +84,87 @@ def swarmboxenplot(
     data.loc[data['x'] == 'b', 'y3'] = np.nan
     fig, stats = swarmboxenplot(data=data, x='x', y=['y1', 'y2', 'y3'], test_kws=dict(parametric=False))
 
+    fig, stats = swarmboxenplot(data=data, x='x', y=['y1', 'y2'], hue='y3')
+    fig, stats = swarmboxenplot(data=data, x='y1', y='y2')
+
 
     """
+    # opts = dict(data=data, x='h', y='y', hue='x', test_kws=dict(parametric=False))
+    # for k, v in opts.items():
+    #     locals()[k] = v
+
+    def _get_empty_stat_results(
+        data: DataFrame,
+        x: str,
+        y: str,
+        hue: Optional[str] = None,
+        add_median: bool = True,
+    ) -> DataFrame:
+        stat = pd.DataFrame(
+            itertools.combinations(data[x].drop_duplicates(), 2),
+            columns=["A", "B"],
+        )
+        stat["Contrast"] = x
+        if hue is not None:
+            huestat = pd.DataFrame(
+                itertools.combinations(data[hue].drop_duplicates(), 2),
+                columns=["A", "B"],
+            )
+            huestat["Contrast"] = hue
+            to_append = [huestat]
+            for v in data[x].unique():
+                n = huestat.copy()
+                n[x] = v
+                n["Contrast"] = f"{x} * {hue}"
+                to_append.append(n)
+            stat = (
+                stat.append(to_append, ignore_index=True)
+                .fillna("-")
+                .sort_values([x, "A", "B"])
+            )
+        stat["Tested"] = False
+        stat["p-unc"] = np.nan
+
+        if add_median:
+            mm = data.groupby(x)[y].median().reset_index()
+            if hue is not None:
+                mm = mm.rename(columns={x: hue})
+                mm = mm.append(data.groupby(hue)[y].median().reset_index())
+                mm = mm.append(
+                    data.groupby([x, hue])[y].median().reset_index()
+                ).fillna("-")
+            for col in ["A", "B"]:
+                stat = stat.merge(
+                    mm.rename(
+                        columns={
+                            hue if hue is not None else x: f"{col}",
+                            y: f"median_{col}",
+                        }
+                    ),
+                    how="left",
+                )
+        return stat
+
+    for var, name in [(x, "x"), (hue, "hue")]:
+        if var is not None:
+            if not data[var].dtype.name in ["category", "string", "object"]:
+                raise ValueError(
+                    f"`{name}` variable must be categorical, string or object."
+                )
+
     if test_kws is None:
         test_kws = dict()
     if plot_kws is None:
         plot_kws = dict()
 
-    if isinstance(y, (list, np.ndarray, pd.Series, pd.Index)):
+    if isinstance(y, MutableSequence):
         n, m = get_grid_dims(y)
-        fig, axes = plt.subplots(n, m, figsize=(m * 4, n * 4), sharex=True)
+        fig, axes = plt.subplots(
+            n, m, figsize=(m * 4, n * 4), sharex=True, squeeze=False
+        )
         _stats = list()
-        for i, _var in enumerate(y):
-            _ax = axes.flatten()[i]
+        for idx, _var in enumerate(y):
+            _ax = axes.flatten()[idx]
             s: DataFrame = swarmboxenplot(
                 data=data,
                 x=x,
@@ -112,11 +184,13 @@ def swarmboxenplot(
             _ax.set(title=_var, xlabel=None, ylabel=None)
             _stats.append(s.assign(Variable=_var))
         # "close" excess subplots
-        for ax in axes.flatten()[i + 1 :]:
+        for ax in axes.flatten()[idx + 1 :]:
             ax.axis("off")
         stats = pd.concat(_stats).reset_index(drop=True)
         stats = stats.reindex(["Variable"] + s.columns.tolist(), axis=1)
         return fig, stats
+
+    assert not isinstance(y, MutableSequence)
 
     if ax is None:
         fig, _ax = plt.subplots(1, 1, figsize=(4, 4))
@@ -136,7 +210,7 @@ def swarmboxenplot(
 
     if test:
         # remove NaNs
-        datat = data.dropna(subset=[x, y])
+        datat = data.dropna(subset=[x, y] + ([hue] if hue is not None else []))
         # remove categories with only one element
         keep = datat.groupby(x).size()[datat.groupby(x).size() > 1].index
         datat = datat.loc[datat[x].isin(keep), :]
@@ -144,15 +218,38 @@ def swarmboxenplot(
             datat[x] = datat[x].cat.remove_unused_categories()
         ylim = _ax.get_ylim()
         ylength = abs(ylim[1]) + abs(ylim[0])
-        stat = pd.DataFrame(
-            itertools.combinations(datat[x].unique(), 2), columns=["A", "B"]
+
+        # Now calculate stats
+        # # get empty dataframe in case nothing can be calculated
+        stat = _get_empty_stat_results(datat, x, y, hue, add_median=True)
+        # # mirror groups to account for own pingouin order
+        stat = (
+            stat.append(
+                stat.rename(
+                    columns={
+                        "B": "A",
+                        "A": "B",
+                        "median_A": "median_B",
+                        "median_B": "median_A",
+                    }
+                )
+            )
+            .sort_values(["Contrast", "A", "B"])
+            .reset_index(drop=True)
         )
         try:
-            stat = pg.pairwise_ttests(
+            _stat = pg.pairwise_ttests(
                 data=datat,
                 dv=y,
                 between=x if hue is None else [x, hue],
-                **test_kws
+                **test_kws,
+            )
+            stat = _stat.merge(
+                stat[
+                    ["Contrast", "A", "B", "median_A", "median_B"]
+                    + ([x] if hue is not None else [])
+                ],
+                how="left",
             )
         except (AssertionError, ValueError) as e:
             print(str(e))
@@ -182,13 +279,13 @@ def swarmboxenplot(
         _ax.scatter(order.values(), mm, alpha=0, color="white")
 
         # Plot significance bars
-        i = 0
+        i = 0.0
         for idx, row in stat.iterrows():
             p = row[pcol]
             if (pd.isnull(p) or (p > test_upper_threshold)) and (
                 not plot_non_significant
             ):
-                i += 1
+                i += 0.33
                 continue
             symbol = (
                 "**"
@@ -204,22 +301,27 @@ def swarmboxenplot(
                 if row[x] != "-":
                     xx = (order[(row[x], row["A"])], order[(row[x], row["B"])])
                 else:
-                    # TODO: get middle
-                    xx = (
-                        order[(row["A"], stat["A"].iloc[-1])] - (1 / nhues),
-                        order[(row["B"], stat["B"].iloc[-1])] - (1 / nhues),
-                    )
+                    try:
+                        # TODO: get more accurate middle of group
+                        xx = (
+                            order[(row["A"], stat["A"].iloc[-1])] - (1 / nhues),
+                            order[(row["B"], stat["B"].iloc[-1])] - (1 / nhues),
+                        )
+                    except KeyError:
+                        # These are the hue groups without contrasting on 'x'
+                        continue
             else:
                 xx = (order[row["A"]], order[row["B"]])
 
+            red_fact = 0.95  # make the end position shorter
             _ax.plot(
-                xx,
+                (xx[0], xx[1] * red_fact),
                 (py, py),
                 color="black",
                 linewidth=1.2,
             )
-            _ax.text(xx[1], py, s=symbol, color="black", ha="center")
-            i += 1
+            _ax.text(xx[1] * red_fact, py, s=symbol, color="black", ha="center")
+            i += 1.0
         _ax.set_ylim(ylim)
         return (fig, stat) if ax is None else stat
     return fig if ax is None else None
