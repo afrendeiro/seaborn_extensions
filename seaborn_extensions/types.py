@@ -1,4 +1,5 @@
 from typing import Union
+from collections.abc import MutableSequence
 
 import pandas
 import numpy
@@ -14,3 +15,6 @@ Figure = Union[matplotlib.figure.Figure]
 Axis = Union[matplotlib.axis.Axis]
 Patch = Union[matplotlib.patches.Patch]
 ColorMap = Union[matplotlib.colors.LinearSegmentedColormap]
+
+
+Iterables = Union[set, MutableSequence, pandas.Series, pandas.Index]

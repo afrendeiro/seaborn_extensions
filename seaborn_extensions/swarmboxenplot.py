@@ -2,7 +2,6 @@
 
 
 from typing import Any, Tuple, Union, Dict, Optional
-from collections.abc import MutableSequence
 import itertools
 import warnings
 
@@ -14,7 +13,7 @@ import seaborn as sns
 import pingouin as pg
 
 
-from seaborn_extensions.types import DataFrame, Axis, Figure
+from seaborn_extensions.types import DataFrame, Axis, Figure, Iterables
 from seaborn_extensions.utils import get_grid_dims
 
 
@@ -31,7 +30,7 @@ def add_transparency_to_boxenplot(ax: Axis, alpha: float = 0.25) -> None:
 def swarmboxenplot(
     data: DataFrame,
     x: str,
-    y: Union[str, MutableSequence],
+    y: Union[str, Iterables],
     hue: Optional[str] = None,
     swarm: bool = True,
     boxen: bool = True,
@@ -45,51 +44,71 @@ def swarmboxenplot(
     test_kws: Optional[Dict[str, Any]] = None,
 ) -> Optional[Union[Figure, DataFrame, Tuple[Figure, DataFrame]]]:
     """
-    # Testing:
+    A categorical plot that overlays individual observations
+    as a swarm plot and summary statistics about them in a boxen plot.
 
-    data = pd.DataFrame(
-        [np.random.random(20), np.random.choice(['a', 'b'], 20)],
-        index=['cont', 'cat']).T.convert_dtypes()
-    data.loc[data['cat'] == 'b', 'cont'] *= 5
-    fig, stats = swarmboxenplot(data=data, x='cat', y='cont')
+    In addition, this plot will test differences between observation
+    groups and add lines representing a significant difference between
+    them.
 
-    data = pd.DataFrame({
-        "x": pd.Categorical(
-            np.random.choice(['a', 'b', 'c'], 100),
-            categories=['a', 'b', 'c'], ordered=True),
-        "h": pd.Categorical(
-            np.random.choice(['p', 'q', 'r', 'w'], 100),
-            categories=['p', 'q', 'r', 'w'], ordered=True),
-        "y": np.random.random(size=100)})
-    data.loc[data['x'] == 'b', 'y'] += 1
-    data.loc[data['x'] == 'c', 'y'] -= 1.5
-    data.loc[(data['x'] == 'c') & (data['h'] == 'p'), 'y'] *= 2.5
-    fig, stats = swarmboxenplot(
-        data=data, x='x', y='y', hue='h', test_kws=dict(parametric=False))
-    fig, stats = swarmboxenplot(
-        data=data, x='h', y='y', hue='x', test_kws=dict(parametric=False))
+    Parameters
+    ----------
+    data: pd.DataFrame
+        A dataframe with data where the rows are the observations and
+        columns are the variables to group them by.
+    x: str
+        The categorical variable.
+    y: str | list[str]
+        The continuous variable to plot.
+        If more than one is given, will ignore the `ax` attribute and
+        return figure with a subplot per each `y` variable.
+    hue: str, optional
+        An optional categorical variable to further group observations by.
+    swarm: bool
+        Whether to plot individual observations as a swarmplot.
+    boxen: bool
+        Whether to plot summary statistics as a boxenplot.
+    ax: matplotlib.axes.Axes, optional
+        An optional axes to draw in.
+    test: bool
+        Whether to test differences between observation groups.
+        If `False`, will not return a dataframe as well.
+    multiple_testing: str
+        Method for multiple testing correction.
+    test_upper_threshold: float
+        Upper theshold to consider p-values significant.
+        Will be marked with "*".
+    test_lower_threshold: float
+        Secondary theshold to consider p-values highly significant.
+        Will be marked with "**".
+    plot_non_significant: bool
+        Whether to add a "n.s." sign to p-values above `test_upper_threshold`.
+    plot_kws: dict
+        Additional values to pass to seaborn.boxenplot or seaborn.swarmplot
+    test_kws: dict
+        Additional values to pass to pingouin.pairwise_ttests.
+        Pass for example dict("parametric"=False) to run a non-parametric test.
 
-    data = pd.DataFrame({
-        "x": pd.Categorical(
-            np.random.choice(['a', 'b', 'c'], 100),
-            categories=['a', 'b', 'c'], ordered=True),
-        "y1": np.random.normal(size=100),
-        "y2": np.random.random(size=100),
-        "y3": np.random.random(size=100)})[::-1]
-    data.loc[data['x'] == 'b', 'y1'] += 3
-    data.loc[data['x'] == 'c', 'y1'] -= 2
-    data.loc[data['x'] == 'b', 'y2'] *= 2
-    data.loc[data['x'] == 'c', 'y2'] *= -2
-    data.loc[data['x'] == 'c', 'y3'] -= 5
-    data.loc[data['x'] == 'b', 'y3'] = np.nan
-    fig, stats = swarmboxenplot(data=data, x='x', y=['y1', 'y2', 'y3'], test_kws=dict(parametric=False))
+    Returns
+    -------
+    tuple[Figure, pandas.DataFrame]:
+        if `ax` is None and `test` is True.
+    pandas.DataFrame:
+        if `ax` is not None.
+    Figure:
+        if `test` is False.
+    None:
+        if `test` is False and `ax` is not None.
 
-    fig, stats = swarmboxenplot(data=data, x='x', y=['y1', 'y2'], hue='y3')
-    fig, stats = swarmboxenplot(data=data, x='y1', y='y2')
-
+    Raises
+    ------
+    ValueError:
+        If either the `x` or `hue` column in `data` are not
+        Category, string or object type, or if `y` is not numeric.
 
     """
     # opts = dict(data=data, x='h', y='y', hue='x', test_kws=dict(parametric=False))
+    # opts = dict(data=data, x='cat', y='cont')
     # for k, v in opts.items():
     #     locals()[k] = v
 
@@ -151,13 +170,15 @@ def swarmboxenplot(
                 raise ValueError(
                     f"`{name}` variable must be categorical, string or object."
                 )
+    if data[y].dtype.name in ["category", "string", "object"]:
+        raise ValueError("`y` variable must be numeric.")
 
     if test_kws is None:
         test_kws = dict()
     if plot_kws is None:
         plot_kws = dict()
 
-    if isinstance(y, MutableSequence):
+    if not isinstance(y, str):
         n, m = get_grid_dims(y)
         fig, axes = plt.subplots(
             n, m, figsize=(m * 4, n * 4), sharex=True, squeeze=False
@@ -182,15 +203,18 @@ def swarmboxenplot(
                 test_kws=test_kws,
             )
             _ax.set(title=_var, xlabel=None, ylabel=None)
-            _stats.append(s.assign(Variable=_var))
+            if test:
+                _stats.append(s.assign(Variable=_var))
         # "close" excess subplots
         for ax in axes.flatten()[idx + 1 :]:
             ax.axis("off")
-        stats = pd.concat(_stats).reset_index(drop=True)
-        stats = stats.reindex(["Variable"] + s.columns.tolist(), axis=1)
-        return fig, stats
+        if test:
+            stats = pd.concat(_stats).reset_index(drop=True)
+            cols = [c for c in stats.columns if c != "Variable"]
+            stats = stats.reindex(["Variable"] + cols, axis=1)
+        return (fig, stats) if test else fig
 
-    assert not isinstance(y, MutableSequence)
+    assert isinstance(y, str)
 
     if ax is None:
         fig, _ax = plt.subplots(1, 1, figsize=(4, 4))
@@ -206,7 +230,7 @@ def swarmboxenplot(
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=UserWarning)
             sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **plot_kws)
-    _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90)
+    _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90, ha="right")
 
     if test:
         # remove NaNs

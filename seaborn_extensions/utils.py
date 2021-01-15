@@ -1,7 +1,9 @@
+from functools import wraps
 from typing import Union, Optional, Tuple, Collection, overload
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from .types import Array, DataFrame
 
@@ -56,3 +58,16 @@ def get_grid_dims(
         except IndexError:
             pass
     return n, m
+
+
+def close_plots(func) -> None:
+    """
+    Decorator to close all plots on function exit.
+    """
+
+    @wraps(func)
+    def close(*args, **kwargs):
+        func(*args, **kwargs)
+        plt.close("all")
+
+    return close
