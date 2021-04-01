@@ -16,38 +16,33 @@ np.random.seed(21)
 def data_simple_nodiff():
     data = pd.DataFrame(
         {"cont": np.random.random(20), "cat": np.random.choice(["a", "b"], 20)}
-    ).convert_dtypes()
+    )
     return data
 
 
 @pytest.fixture
-def data_simple_diff():
-    data = pd.DataFrame(
-        [np.random.random(20), np.random.choice(["a", "b"], 20)],
-        index=["cont", "cat"],
-    ).T.convert_dtypes()
-    data.loc[data["cat"] == "b", "cont"] *= 5
-    return data
+def data_simple_diff(data_simple_nodiff):
+    data_simple_nodiff.loc[data_simple_nodiff["cat"] == "b", "cont"] *= 5
+    return data_simple_nodiff
 
 
 @pytest.fixture
 def data_simple_long_nodiff():
     data = pd.DataFrame(
-        [np.random.random(40), np.random.choice(["a", "b", "c"], 40)],
-        index=["cont", "cat"],
-    ).T.convert_dtypes()
+        {"cont": np.random.random(20), "cat": np.random.choice(["a", "b"], 20)}
+    )
     return data
 
 
 @pytest.fixture
-def data_simple_long_diff():
-    data = pd.DataFrame(
-        [np.random.random(40), np.random.choice(["a", "b", "c"], 40)],
-        index=["cont", "cat"],
-    ).T.convert_dtypes()
-    data.loc[data["cat"] == "b", "cont"] *= 5
-    data.loc[data["cat"] == "c", "cont"] -= 5
-    return data
+def data_simple_long_diff(data_simple_long_nodiff):
+    data_simple_long_nodiff.loc[
+        data_simple_long_nodiff["cat"] == "b", "cont"
+    ] *= 5
+    data_simple_long_nodiff.loc[
+        data_simple_long_nodiff["cat"] == "c", "cont"
+    ] -= 5
+    return data_simple_long_nodiff
 
 
 @pytest.fixture
@@ -75,6 +70,36 @@ def data_interaction():
 
 
 @pytest.fixture
+def data_complex_unordered():
+    data = pd.DataFrame(
+        {
+            "x": pd.Categorical(
+                np.random.choice(["a", "b", "c"], 100),
+                categories=["c", "b", "a"],
+                # ordered=True,
+            ),
+            "h": pd.Categorical(
+                np.random.choice(["p", "q", "r", "w"], 100),
+                categories=["w", "q", "r", "p"],
+                ordered=True,
+            ),
+            "y": np.random.random(size=100),
+        }
+    )[::-1]
+    data.loc[data["x"] == "b", "y"] += 1
+    data.loc[data["x"] == "c", "y"] -= 1.5
+    data.loc[(data["x"] == "c") & (data["h"] == "p"), "y"] *= 2.5
+    return data
+    fig, stats = swarmboxenplot(data=data, x="x", y="y", hue="h")
+
+
+@pytest.fixture
+def data_hue_nan(data_interaction):
+    data_interaction.iloc[-1, 1] = np.nan
+    return data_interaction
+
+
+@pytest.fixture
 def data_complex_missing():
     data = pd.DataFrame(
         {
@@ -87,6 +112,7 @@ def data_complex_missing():
             "y2": np.random.random(size=100),
             "y3": np.random.random(size=100),
         }
+        # revese order to see if plot puts it back in order
     )[::-1]
     data.loc[data["x"] == "b", "y1"] += 3
     data.loc[data["x"] == "c", "y1"] -= 2
@@ -158,6 +184,20 @@ class TestSwarmBoxenPlot:
 
     def test_interaction(self, data_interaction):
         data = data_interaction
+
+        fig, stats = swarmboxenplot(
+            data=data, x="x", y="y", hue="h", test_kws=dict(parametric=False)
+        )
+
+        assert has_significant(fig)
+        fig, stats = swarmboxenplot(
+            data=data, x="h", y="y", hue="x", test_kws=dict(parametric=False)
+        )
+
+        assert has_significant(fig)
+
+    def test_hue_with_nan(self, data_hue_nan):
+        data = data_hue_nan
 
         fig, stats = swarmboxenplot(
             data=data, x="x", y="y", hue="h", test_kws=dict(parametric=False)

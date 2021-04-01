@@ -71,3 +71,35 @@ def close_plots(func) -> None:
         plt.close("all")
 
     return close
+
+
+def log_pvalues(x, f=0.1):
+    """
+    Calculate -log10(p-value) of array.
+
+    Replaces infinite values with:
+
+    .. highlight:: python
+    .. code-block:: python
+
+        max(x) + max(x) * f
+
+    that is, fraction ``f`` more than the maximum non-infinite -log10(p-value).
+
+    Parameters
+    ----------
+    x : :class:`pandas.Series`
+        Series with numeric values
+    f : :obj:`float`
+        Fraction to augment the maximum value by if ``x`` contains infinite values.
+
+        Defaults to 0.1.
+
+    Returns
+    -------
+    :class:`pandas.Series`
+        Transformed values.
+    """
+    ll = -np.log10(x)
+    rmax = ll[ll != np.inf].max()
+    return ll.replace(np.inf, rmax + rmax * f)

@@ -87,7 +87,7 @@ def swarmboxenplot(
         Additional values to pass to seaborn.boxenplot or seaborn.swarmplot
     test_kws: dict
         Additional values to pass to pingouin.pairwise_ttests.
-        Pass for example dict("parametric"=False) to run a non-parametric test.
+        The default is: dict(parametric=False) to run a non-parametric test.
 
     Returns
     -------
@@ -170,15 +170,16 @@ def swarmboxenplot(
                 raise ValueError(
                     f"`{name}` variable must be categorical, string or object."
                 )
-    if data[y].dtype.name in ["category", "string", "object"]:
-        raise ValueError("`y` variable must be numeric.")
 
     if test_kws is None:
-        test_kws = dict()
+        test_kws = dict(parametric=False)
     if plot_kws is None:
         plot_kws = dict()
 
+    data = data.sort_values([x] + ([hue] if hue is not None else []))
+
     if not isinstance(y, str):
+        # TODO: display only one legend for hue
         n, m = get_grid_dims(y)
         fig, axes = plt.subplots(
             n, m, figsize=(m * 4, n * 4), sharex=True, squeeze=False
@@ -214,7 +215,8 @@ def swarmboxenplot(
             stats = stats.reindex(["Variable"] + cols, axis=1)
         return (fig, stats) if test else fig
 
-    assert isinstance(y, str)
+    if data[y].dtype.name in ["category", "string", "object"]:
+        raise ValueError("`y` variable must be numeric.")
 
     if ax is None:
         fig, _ax = plt.subplots(1, 1, figsize=(4, 4))
@@ -240,8 +242,8 @@ def swarmboxenplot(
         datat = datat.loc[datat[x].isin(keep), :]
         if datat[x].dtype.name == "category":
             datat[x] = datat[x].cat.remove_unused_categories()
-        ylim = _ax.get_ylim()
-        ylength = abs(ylim[1]) + abs(ylim[0])
+        ylim = _ax.get_ylim()  # save original axis boundaries for later
+        ylength = abs(ylim[1]) + (abs(ylim[0]) if ylim[0] < 0 else 0)
 
         # Now calculate stats
         # # get empty dataframe in case nothing can be calculated
@@ -295,7 +297,7 @@ def swarmboxenplot(
         if hue is None:
             order = {k: float(i) for i, k in enumerate(mm.index)}
         else:
-            nhues = len(np.unique(data[hue]))
+            nhues = data[hue].drop_duplicates().dropna().shape[0]
             order = {
                 k: (float(i) / nhues) - (1 / nhues) - 0.05
                 for i, k in enumerate(mm.index)
@@ -303,13 +305,15 @@ def swarmboxenplot(
         _ax.scatter(order.values(), mm, alpha=0, color="white")
 
         # Plot significance bars
-        i = 0.0
+        # start at top of the plot and progressively decrease sig. bar downwards
+        py = data[y].max()
+        incr = ylength / 100  # divide yaxis in 100 steps
         for idx, row in stat.iterrows():
             p = row[pcol]
             if (pd.isnull(p) or (p > test_upper_threshold)) and (
                 not plot_non_significant
             ):
-                i += 0.33
+                py -= incr
                 continue
             symbol = (
                 "**"
@@ -318,9 +322,6 @@ def swarmboxenplot(
                 if ((p > test_upper_threshold) or pd.isnull(p))
                 else "*"
             )
-            # py = data[y].quantile(0.95) - (i * (ylength / 20))
-            py = data[y].max() - (i * (ylength / 100))
-
             if hue is not None:
                 if row[x] != "-":
                     xx = (order[(row[x], row["A"])], order[(row[x], row["B"])])
@@ -345,7 +346,7 @@ def swarmboxenplot(
                 linewidth=1.2,
             )
             _ax.text(xx[1] * red_fact, py, s=symbol, color="black", ha="center")
-            i += 1.0
+            py -= incr
         _ax.set_ylim(ylim)
         return (fig, stat) if ax is None else stat
     return fig if ax is None else None
