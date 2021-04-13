@@ -17,13 +17,21 @@ from seaborn_extensions.types import DataFrame, Axis, Figure, Iterables
 from seaborn_extensions.utils import get_grid_dims
 
 
-def add_transparency_to_boxenplot(ax: Axis, alpha: float = 0.25) -> None:
-    patches = (
-        matplotlib.collections.PatchCollection,
-        matplotlib.collections.PathCollection,
+def add_transparency_to_plot(
+    ax: Axis, alpha: float = 0.25, kind: str = "boxen"
+) -> None:
+
+    objs = (
+        (
+            matplotlib.collections.PatchCollection,
+            matplotlib.collections.PathCollection,
+        )
+        if kind == "boxen"
+        else (matplotlib.patches.Rectangle)
     )
+
     for x in ax.get_children():
-        if isinstance(x, patches):
+        if isinstance(x, objs):
             x.set_alpha(alpha)
 
 
@@ -34,6 +42,7 @@ def swarmboxenplot(
     hue: Optional[str] = None,
     swarm: bool = True,
     boxen: bool = True,
+    bar: bool = False,
     ax: Optional[Axis] = None,
     test: bool = True,
     multiple_testing: Union[bool, str] = "fdr_bh",
@@ -194,6 +203,7 @@ def swarmboxenplot(
                 hue=hue,
                 swarm=swarm,
                 boxen=boxen,
+                bar=bar,
                 ax=_ax,
                 test=test,
                 multiple_testing=multiple_testing,
@@ -223,9 +233,13 @@ def swarmboxenplot(
     else:
         _ax = ax
     if boxen:
+        assert not bar
         sns.boxenplot(data=data, x=x, y=y, hue=hue, ax=_ax, **plot_kws)
-    if boxen and swarm:
-        add_transparency_to_boxenplot(_ax)
+    if bar:
+        assert not boxen
+        sns.barplot(data=data, x=x, y=y, hue=hue, ax=_ax, **plot_kws)
+    if (boxen or bar) and swarm:
+        add_transparency_to_plot(_ax, kind="bar" if bar else "boxen")
     if swarm:
         if hue is not None and "dodge" not in plot_kws:
             plot_kws["dodge"] = True

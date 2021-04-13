@@ -12,8 +12,11 @@ def volcano_plot(
     n_top: int = None,
 ) -> Figure:
     """
-    Assumes stats dataframe from seaborn_extensions.swarmboxenplot.
-    A / B -> positive hedges value if A > B.
+    Assumes stats dataframe from seaborn_extensions.swarmboxenplot:
+        - "hedges" column has effect size
+        - "p-unc" column has significance
+        - "p-cor" column has significance (multiple test corrected)
+        - A / B -> positive hedges value if A > B.
     """
     if diff_threshold is not None:
         assert n_top is None
