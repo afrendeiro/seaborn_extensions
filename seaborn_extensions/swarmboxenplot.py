@@ -223,6 +223,8 @@ def swarmboxenplot(
             stats = pd.concat(_stats).reset_index(drop=True)
             cols = [c for c in stats.columns if c != "Variable"]
             stats = stats.reindex(["Variable"] + cols, axis=1)
+
+            # if stats.shape == len(y): correct
         return (fig, stats) if test else fig
 
     if data[y].dtype.name in ["category", "string", "object"]:

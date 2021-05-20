@@ -124,24 +124,47 @@ def get_categorical_cmap(x: Series) -> matplotlib.colors.ListedColormap:
     raise ValueError("Only up to 40 unique values can be plotted as color.")
 
 
-def to_color_series(x: Series, cmap: Optional[str] = "Greens") -> Series:
+def to_color_series(x: Series, cmap: Optional[str] = None) -> Series:
     """
     Map a numeric pandas series to a series of RBG values.
     NaN values are white.
     """
+    cmap_types = (
+        matplotlib.colors.ListedColormap,
+        matplotlib.colors.LinearSegmentedColormap,
+    )
+
     if is_numeric(x):
+        if cmap is None:
+            cmap = "Greens"
         return pd.Series(
-            plt.get_cmap(cmap)(minmax_scale(x)).tolist(),
+            plt.get_cmap(cmap)(minmax_scale(x.astype(float))).tolist(),
             index=x.index,
             name=x.name,
         )
     # str or categorical
     res = to_numeric(x)
-    _cmap = get_categorical_cmap(res)
+    if cmap is None or isinstance(
+        cmap, cmap_types[1]
+    ):  # matching a LinearSegmentedColormap means it was probably passed a default
+        _cmap = get_categorical_cmap(res)
+    elif isinstance(cmap, str):
+        _cmap = plt.get_cmap(cmap)
+    elif isinstance(cmap, cmap_types[0]):
+        _cmap = cmap
+    elif isinstance(cmap, (list, np.ndarray)):
+        _cmap = matplotlib.colors.ListedColormap(cmap, name="custom")
+    elif isinstance(cmap, float):
+        raise ValueError(
+            "Please provide same number of `row/col_colors_cmaps` as `row/col_colors`."
+        )
+    else:
+        raise ValueError(
+            f"Could not understand values passed as `row/col_colors_cmaps`: {cmap}."
+        )
+
     # float values passed to cmap must be in [0.0-1.0] range
-    return pd.Series(
-        _cmap(res / res.max()).tolist(), index=x.index, name=x.name
-    )
+    return pd.Series(_cmap(res / res.max()).tolist(), index=x.index, name=x.name)
 
 
 def to_color_dataframe(
@@ -171,9 +194,7 @@ def _add_extra_colorbars_to_clustermap(
 ) -> None:
     """Add either a row or column colorbar to a seaborn Grid."""
 
-    def add(
-        data: Series, cmap: str, bbox: List[List[int]], orientation: str
-    ) -> None:
+    def add(data: Series, cmap: str, bbox: List[List[int]], orientation: str) -> None:
         ax = grid.fig.add_axes(matplotlib.transforms.Bbox(bbox))
         if is_numeric(data):
             if is_datetime(data):
@@ -251,13 +272,9 @@ def _add_colorbars(
 ) -> None:
     """Add row and column colorbars to a seaborn Grid."""
     if rows is not None:
-        _add_extra_colorbars_to_clustermap(
-            grid, rows, location="row", cmaps=row_cmaps
-        )
+        _add_extra_colorbars_to_clustermap(grid, rows, location="row", cmaps=row_cmaps)
     if cols is not None:
-        _add_extra_colorbars_to_clustermap(
-            grid, cols, location="col", cmaps=col_cmaps
-        )
+        _add_extra_colorbars_to_clustermap(grid, cols, location="col", cmaps=col_cmaps)
 
 
 def clustermap(*args, **kwargs):
@@ -272,29 +289,25 @@ def clustermap(*args, **kwargs):
         ...
 
     # # Decide if labeling x/y-ticklabels based on shape
-    max_items = 200
+    max_items = 120
     data = args[0]
     if "xticklabels" not in kwargs:
-        kwargs["xticklabels"] = True if data.shape[0] < max_items else False
+        kwargs["xticklabels"] = data.shape[1] < max_items
     if "yticklabels" not in kwargs:
-        kwargs["yticklabels"] = True if data.shape[1] < max_items else False
+        kwargs["yticklabels"] = data.shape[0] < max_items
 
     # dendrogram aspect ratio
     d = 0.1
     aspect = kwargs["figsize"][0] / kwargs["figsize"][1]
     smallest = (
-        np.argmin(kwargs["figsize"])
-        if len(np.unique(kwargs["figsize"])) > 1
-        else -1
+        np.argmin(kwargs["figsize"]) if len(np.unique(kwargs["figsize"])) > 1 else -1
     )
     if smallest == -1:
         s = 1
         dar = (d, d)
     else:
         s = kwargs["figsize"][smallest] * d
-        dar = tuple(
-            [d if i == smallest else s / kwargs["figsize"][i] for i in range(2)]
-        )
+        dar = tuple([d if i == smallest else s / kwargs["figsize"][i] for i in range(2)])
 
     if "cbar_kws" not in kwargs:
         kwargs["cbar_kws"] = dict()
@@ -353,14 +366,13 @@ def clustermap(*args, **kwargs):
     grid = sns.clustermap(*args, **kwargs)
 
     # Add the colorbar legends to the figure
-    _add_colorbars(
-        grid, **_kwargs, row_cmaps=cmaps["row"], col_cmaps=cmaps["col"]
-    )
+    _add_colorbars(grid, **_kwargs, row_cmaps=cmaps["row"], col_cmaps=cmaps["col"])
     # Some nicities
-    if grid.ax_heatmap.get_xlabel() in ["", None]:
-        grid.ax_heatmap.set_xlabel(f"(n = {data.shape[0]})")
-    if grid.ax_heatmap.get_ylabel() in ["", None]:
-        grid.ax_heatmap.set_ylabel(f"(n = {data.shape[1]})")
+    # if grid.ax_heatmap.get_xlabel() in ["", None]:
+    ax = grid.ax_heatmap
+    ax.set_xlabel(f"{ax.get_xlabel()}\n(n = {data.shape[1]})")
+    # if ax.get_ylabel() in ["", None]:
+    ax.set_ylabel(f"{ax.get_ylabel()}\n(n = {data.shape[0]})")
     return grid
 
 
@@ -377,8 +389,12 @@ add_docs1 = """config : str, optional
         These two configurations provide custom default keyword arguments
         compared with the native seaborn function and several adjustments to
         figure and axis sizes, labels and other objects.
+        Options:
          - "abs": good for non-negative data.
          - "zscore": good for real data with variables with very different means.
+        Other keyword arguments affected (only is not provided):
+         - {x,y}ticklabels: will turn off if more than 120 items in each axis.
+         - dendrogram_ratio: will adjust, given relative shape of data.
     """
 
 
