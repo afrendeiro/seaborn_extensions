@@ -236,6 +236,10 @@ def swarmboxenplot(
         _ax = ax
     if boxen:
         assert not bar
+        # Tmp fix for lack of support for Pandas Int64 in boxenplot:
+        if data[y].dtype.name == "Int64":
+            data[y] = data[y].astype(float)
+
         sns.boxenplot(data=data, x=x, y=y, hue=hue, ax=_ax, **plot_kws)
     if bar:
         assert not boxen
