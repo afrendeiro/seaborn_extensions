@@ -1,7 +1,7 @@
 """Main module."""
 
 
-from typing import Any, Tuple, Union, Dict, Optional
+from typing import Any, Tuple, Sequence, Union, Dict, Optional
 import itertools
 import warnings
 
@@ -17,9 +17,7 @@ from seaborn_extensions.types import DataFrame, Axis, Figure, Iterables
 from seaborn_extensions.utils import get_grid_dims
 
 
-def add_transparency_to_plot(
-    ax: Axis, alpha: float = 0.25, kind: str = "boxen"
-) -> None:
+def add_transparency_to_plot(ax: Axis, alpha: float = 0.25, kind: str = "boxen") -> None:
 
     objs = (
         (
@@ -39,18 +37,18 @@ def swarmboxenplot(
     data: DataFrame,
     x: str,
     y: Union[str, Iterables],
-    hue: Optional[str] = None,
+    hue: str = None,
     swarm: bool = True,
     boxen: bool = True,
     bar: bool = False,
-    ax: Optional[Axis] = None,
+    ax: Union[Axis, Sequence[Axis]] = None,
     test: bool = True,
     multiple_testing: Union[bool, str] = "fdr_bh",
     test_upper_threshold: float = 0.05,
     test_lower_threshold: float = 0.01,
     plot_non_significant: bool = False,
-    plot_kws: Optional[Dict[str, Any]] = None,
-    test_kws: Optional[Dict[str, Any]] = None,
+    plot_kws: Dict[str, Any] = None,
+    test_kws: Dict[str, Any] = None,
 ) -> Optional[Union[Figure, DataFrame, Tuple[Figure, DataFrame]]]:
     """
     A categorical plot that overlays individual observations
@@ -158,9 +156,9 @@ def swarmboxenplot(
             if hue is not None:
                 mm = mm.rename(columns={x: hue})
                 mm = mm.append(data.groupby(hue)[y].median().reset_index())
-                mm = mm.append(
-                    data.groupby([x, hue])[y].median().reset_index()
-                ).fillna("-")
+                mm = mm.append(data.groupby([x, hue])[y].median().reset_index()).fillna(
+                    "-"
+                )
             for col in ["A", "B"]:
                 stat = stat.merge(
                     mm.rename(
@@ -189,13 +187,18 @@ def swarmboxenplot(
 
     if not isinstance(y, str):
         # TODO: display only one legend for hue
-        n, m = get_grid_dims(y)
-        fig, axes = plt.subplots(
-            n, m, figsize=(m * 4, n * 4), sharex=True, squeeze=False
-        )
+        if ax is None:
+            n, m = get_grid_dims(y)
+            fig, axes = plt.subplots(
+                n, m, figsize=(m * 4, n * 4), sharex=True, squeeze=False
+            )
+        else:
+            if isinstance(ax, np.ndarray):
+                axes = ax.flatten()
+
         _stats = list()
         for idx, _var in enumerate(y):
-            _ax = axes.flatten()[idx]
+            _ax = axes[idx]
             s: DataFrame = swarmboxenplot(
                 data=data,
                 x=x,
@@ -217,15 +220,17 @@ def swarmboxenplot(
             if test:
                 _stats.append(s.assign(Variable=_var))
         # "close" excess subplots
-        for ax in axes.flatten()[idx + 1 :]:
-            ax.axis("off")
+        for _ax in axes[idx + 1 :]:
+            _ax.axis("off")
         if test:
             stats = pd.concat(_stats).reset_index(drop=True)
             cols = [c for c in stats.columns if c != "Variable"]
             stats = stats.reindex(["Variable"] + cols, axis=1)
 
             # if stats.shape == len(y): correct
-        return (fig, stats) if test else fig
+        if ax is None:
+            return (fig, stats) if test else fig
+        return stats if test else None
 
     if data[y].dtype.name in ["category", "string", "object"]:
         raise ValueError("`y` variable must be numeric.")
@@ -304,9 +309,7 @@ def swarmboxenplot(
         if multiple_testing is not False:
             if "p-unc" not in stat.columns:
                 stat["p-unc"] = np.nan
-            stat["p-cor"] = pg.multicomp(
-                stat["p-unc"].values, method=multiple_testing
-            )[1]
+            stat["p-cor"] = pg.multicomp(stat["p-unc"].values, method=multiple_testing)[1]
             pcol = "p-cor"
         else:
             pcol = "p-unc"
@@ -319,8 +322,7 @@ def swarmboxenplot(
         else:
             nhues = data[hue].drop_duplicates().dropna().shape[0]
             order = {
-                k: (float(i) / nhues) - (1 / nhues) - 0.05
-                for i, k in enumerate(mm.index)
+                k: (float(i) / nhues) - (1 / nhues) - 0.05 for i, k in enumerate(mm.index)
             }
         _ax.scatter(order.values(), mm, alpha=0, color="white")
 
