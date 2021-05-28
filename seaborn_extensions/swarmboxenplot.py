@@ -192,11 +192,13 @@ def swarmboxenplot(
             fig, axes = plt.subplots(
                 n, m, figsize=(m * 4, n * 4), sharex=True, squeeze=False
             )
+            axes = axes.flatten()
         else:
             if isinstance(ax, np.ndarray):
                 axes = ax.flatten()
 
         _stats = list()
+        idx = -1
         for idx, _var in enumerate(y):
             _ax = axes[idx]
             s: DataFrame = swarmboxenplot(
@@ -260,6 +262,10 @@ def swarmboxenplot(
     _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90, ha="right")
 
     if test:
+        #
+        if not data.index.is_unique:
+            print("Warning: dataframe contains a duplicated index.")
+
         # remove NaNs
         datat = data.dropna(subset=[x, y] + ([hue] if hue is not None else []))
         # remove categories with only one element
