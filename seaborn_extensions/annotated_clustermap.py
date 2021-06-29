@@ -1,3 +1,4 @@
+import typing as tp
 from typing import Optional, List, Union, Callable
 from functools import wraps
 import warnings
@@ -10,6 +11,60 @@ import seaborn as sns
 
 from seaborn_extensions.types import Series, DataFrame
 from seaborn_extensions.utils import minmax_scale
+
+
+# TODO: revamp supporting custom cmaps/palettes
+
+from imc.types import Array, Figure
+
+
+def get_attribute_colors(
+    y: DataFrame,
+    attributes: tp.Sequence[str],
+    palettes: tp.Mapping[str, tp.Tuple[float]],
+    cmaps: tp.Mapping[str, str],
+    as_dataframe: bool = False,
+) -> tp.Union[Array, DataFrame]:
+    vals = list()
+    for attr in attributes:
+        if attr in palettes:
+            p = dict(zip(y[attr].cat.categories, palettes[attr]))
+            val = np.asarray([p[v] if not pd.isnull(v) else (0, 0, 0) for v in y[attr]])
+        elif attr in cmaps:
+            cmap = plt.get_cmap(cmaps[attr])
+            val = cmap(minmax_scale(y[attr].astype(float)))[:, :3]
+        vals.append(val)
+    if as_dataframe:
+        return pd.DataFrame(
+            map(tuple, np.asarray(vals)), index=attributes, columns=y.index
+        )
+    return np.asarray(vals)
+
+
+def plot_attribute_heatmap(
+    y: DataFrame,
+    attributes: tp.Sequence[str],
+    palettes: tp.Mapping[str, tp.Tuple[float]],
+    cmaps: tp.Mapping[str, str],
+    **kwargs,
+) -> Figure:
+    vals = get_attribute_colors(y, attributes, palettes, cmaps)
+    if "ax" not in kwargs:
+        fig, axes = plt.subplots(
+            len(attributes), **kwargs, gridspec_kw=dict(wspace=0, hspace=0)
+        )
+    else:
+        fig = kwargs["ax"].figure
+    # ax.imshow(vals)
+    for _p, attr, ax in zip(vals, attributes, axes):
+        ax.imshow(_p[np.newaxis, ...])
+        ax.set(xticks=[], yticks=[0])
+        ax.set_yticklabels([attr], rotation=0)
+        sns.despine(ax=ax, left=True, bottom=True)
+    ax = axes[-1]
+    ax.set_xticks(range(len(y.index)))
+    ax.set_xticklabels(y.index, rotation=90)
+    return fig
 
 
 DEFAULT_CHANNEL_COLORS = [
