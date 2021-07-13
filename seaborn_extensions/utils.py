@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from .types import Array, DataFrame
+from seaborn_extensions.types import Array, DataFrame
 
 
 def is_documented_by(original):

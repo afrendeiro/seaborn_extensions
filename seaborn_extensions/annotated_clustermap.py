@@ -15,7 +15,7 @@ from seaborn_extensions.utils import minmax_scale
 
 # TODO: revamp supporting custom cmaps/palettes
 
-from imc.types import Array, Figure
+from seaborn_extensions.types import Array, Figure
 
 
 def get_attribute_colors(

@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pingouin as pg
 
-
 from seaborn_extensions.types import DataFrame, Axis, Figure, Iterables
 from seaborn_extensions.utils import get_grid_dims
 
@@ -31,6 +30,57 @@ def add_transparency_to_plot(ax: Axis, alpha: float = 0.25, kind: str = "boxen")
     for x in ax.get_children():
         if isinstance(x, objs):
             x.set_alpha(alpha)
+
+
+def _get_empty_stat_results(
+    data: DataFrame,
+    x: str,
+    y: str,
+    hue: Optional[str] = None,
+    add_median: bool = True,
+) -> DataFrame:
+    stat = pd.DataFrame(
+        itertools.combinations(data[x].drop_duplicates(), 2),
+        columns=["A", "B"],
+    )
+    stat["Contrast"] = x
+    if hue is not None:
+        huestat = pd.DataFrame(
+            itertools.combinations(data[hue].drop_duplicates(), 2),
+            columns=["A", "B"],
+        )
+        huestat["Contrast"] = hue
+        to_append = [huestat]
+        for v in data[x].unique():
+            n = huestat.copy()
+            n[x] = v
+            n["Contrast"] = f"{x} * {hue}"
+            to_append.append(n)
+        stat = (
+            stat.append(to_append, ignore_index=True)
+            .fillna("-")
+            .sort_values([x, "A", "B"])
+        )
+    stat["Tested"] = False
+    stat["p-unc"] = np.nan
+
+    if add_median:
+        mm = data.groupby(x)[y].median().reset_index()
+        if hue is not None:
+            mm = mm.rename(columns={x: hue})
+            mm = mm.append(data.groupby(hue)[y].median().reset_index())
+            mm = mm.append(data.groupby([x, hue])[y].median().reset_index()).fillna("-")
+        for col in ["A", "B"]:
+            stat = stat.merge(
+                mm.rename(
+                    columns={
+                        hue if hue is not None else x: f"{col}",
+                        y: f"median_{col}",
+                    }
+                ),
+                how="left",
+            )
+    return stat
 
 
 def swarmboxenplot(
@@ -118,58 +168,6 @@ def swarmboxenplot(
     # opts = dict(data=data, x='cat', y='cont')
     # for k, v in opts.items():
     #     locals()[k] = v
-
-    def _get_empty_stat_results(
-        data: DataFrame,
-        x: str,
-        y: str,
-        hue: Optional[str] = None,
-        add_median: bool = True,
-    ) -> DataFrame:
-        stat = pd.DataFrame(
-            itertools.combinations(data[x].drop_duplicates(), 2),
-            columns=["A", "B"],
-        )
-        stat["Contrast"] = x
-        if hue is not None:
-            huestat = pd.DataFrame(
-                itertools.combinations(data[hue].drop_duplicates(), 2),
-                columns=["A", "B"],
-            )
-            huestat["Contrast"] = hue
-            to_append = [huestat]
-            for v in data[x].unique():
-                n = huestat.copy()
-                n[x] = v
-                n["Contrast"] = f"{x} * {hue}"
-                to_append.append(n)
-            stat = (
-                stat.append(to_append, ignore_index=True)
-                .fillna("-")
-                .sort_values([x, "A", "B"])
-            )
-        stat["Tested"] = False
-        stat["p-unc"] = np.nan
-
-        if add_median:
-            mm = data.groupby(x)[y].median().reset_index()
-            if hue is not None:
-                mm = mm.rename(columns={x: hue})
-                mm = mm.append(data.groupby(hue)[y].median().reset_index())
-                mm = mm.append(data.groupby([x, hue])[y].median().reset_index()).fillna(
-                    "-"
-                )
-            for col in ["A", "B"]:
-                stat = stat.merge(
-                    mm.rename(
-                        columns={
-                            hue if hue is not None else x: f"{col}",
-                            y: f"median_{col}",
-                        }
-                    ),
-                    how="left",
-                )
-        return stat
 
     for var, name in [(x, "x"), (hue, "hue")]:
         if var is not None:
