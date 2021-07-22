@@ -11,7 +11,7 @@ Welcome to seaborn_extensions's documentation!
    modules
    contributing
    authors
-   history
+   changelog
 
 Indices and tables
 ==================
