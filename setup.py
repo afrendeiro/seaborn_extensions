@@ -60,7 +60,7 @@ setup(
     url="https://github.com/afrendeiro/seaborn_extensions",
     project_urls={
         "Bug Tracker": "https://github.com/afrendeiro/seaborn_extensions/issues",
-        # "Documentation": "https://seaborn_extensions.readthedocs.io",
+        "Documentation": "https://seaborn-extensions.readthedocs.io",
         "Source Code": "https://github.com/afrendeiro/seaborn_extensions",
     },
     zip_safe=False,
