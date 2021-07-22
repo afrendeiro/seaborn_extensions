@@ -12,7 +12,7 @@ To install seaborn_extensions, run this command in your terminal:
 
 .. code-block:: console
 
-    $ pip install seaborn_extensions
+    $ pip install seaborn-extensions
 
 This is the preferred method to install seaborn_extensions, as it will always install the most recent stable release.
 
