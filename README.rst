@@ -13,8 +13,6 @@ seaborn_extensions
         :alt: Documentation Status
 
 
-
-
 My collection of general ploting functions that I build on top of seaborn.
 
 
@@ -25,8 +23,8 @@ My collection of general ploting functions that I build on top of seaborn.
 Features
 --------
 
-* Swarmboxenplot: Overlayed swarm- and boxen-plots with significance bars between groups.
-* Annotated clustermap: The great clustermap but with easy annotation of rows and columns for numeric and categorical factors.
+* swarmboxenplot: Overlayed swarm- and boxen-plots with significance bars between groups.
+* clustermap: The great clustermap but with easy annotation of rows and columns for numeric and categorical factors.
 
 Credits
 -------

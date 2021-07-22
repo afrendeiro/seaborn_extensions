@@ -2,6 +2,6 @@
 Usage
 =====
 
-To use seaborn_extensions in a project::
+To use plotting functions of seaborn_extensions in a project::
 
-    import seaborn_extensions
+    from seaborn_extensions import clustermap, swarmboxenplot

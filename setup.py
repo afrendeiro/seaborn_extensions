@@ -49,7 +49,8 @@ setup(
     ],
     description="Extensions of seaborn plots for biology",
     license="GNU General Public License v3",
-    long_description=readme + "\n\n" + changelog,
+    long_description=readme,
+    # long_description_content_type
     include_package_data=True,
     keywords="seaborn_extensions",
     setup_requires=["setuptools_scm"],
