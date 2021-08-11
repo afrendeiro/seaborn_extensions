@@ -118,7 +118,9 @@ SEQUENCIAL_CMAPS = [
 ]
 
 
-def is_numeric(x: Series) -> bool:
+def is_numeric(x: tp.Union[Series, tp.Any]) -> bool:
+    if not isinstance(x, pd.Series):
+        x = pd.Series(x)
     if (
         x.dtype.name
         in [
@@ -135,8 +137,12 @@ def is_numeric(x: Series) -> bool:
         or is_datetime(x)
     ):
         return True
-    if x.dtype.name in ["object", "string", "boolean", "bool", "category"]:
+    if x.dtype.name in ["object", "string", "boolean", "bool"]:
         return False
+    if x.dtype.name == "category":
+        if len(set(type(i) for i in x)) != 1:
+            raise ValueError("Series contains mixed types. Cannot transfer to color!")
+        return is_numeric(x.iloc[0])
     raise ValueError(f"Cannot transfer data type '{x.dtype}' to color!")
 
 
@@ -433,52 +439,69 @@ def clustermap(*args, **kwargs):
     return grid
 
 
-# TODO: edit original seaborn.clustermap docstring to document {row,col}_colors_cmaps arguments.
-docs = sns.clustermap.__doc__
-
-start1_docs = "pivot_kws : "
-end1_docs = "method : "
-start1 = docs.index(start1_docs)
-end1 = docs.index(end1_docs)
-add_docs1 = """config : str, optional
-        EXTENSION!
-        One of two pre-defined configurations: "abs", "zscore".
-        These two configurations provide custom default keyword arguments
-        compared with the native seaborn function and several adjustments to
-        figure and axis sizes, labels and other objects.
-        Options:
-         - "abs": good for non-negative data.
-         - "zscore": good for real data with variables with very different means.
-        Other keyword arguments affected (only is not provided):
-         - {x,y}ticklabels: will turn off if more than 120 items in each axis.
-         - dendrogram_ratio: will adjust, given relative shape of data.
+def _add_docs_to_clustermap():
     """
-
-
-start2_docs = "{row,col}_colors : "
-end2_docs = "mask : bool"
-start2 = docs.index(start2_docs)
-end2 = docs.index(end2_docs)
-add_docs2 = """{row,col}_colors : list-like or pandas DataFrame/Series, optional
-        EXTENSION!
-        List of colors to label for either the rows or columns. Useful to
-        evaluate whether samples within a group are clustered together. Can
-        use nested lists or DataFrame for multiple color levels of labeling.
-        If given as a DataFrame or Series, labels for the colors are extracted
-        from the DataFrames column names or from the name of the Series.
-        DataFrame/Series colors are also matched to the data by their
-        index, ensuring colors are drawn in the correct order.
-
-        TODO: complete defining new behavious
-    {row,col}_colors_cmaps:
-        EXTENSION!
-        TODO: describe
+    Edit original seaborn.clustermap docstring to document {row,col}_colors_cmaps arguments.
     """
+    # TODO: finish documenting changes.
+    error_msg = (
+        "Seaborn version may not be compatible with seaborn_extensions version."
+        "Skipping annotating clustermap function docstring."
+    )
+
+    docs = sns.clustermap.__doc__
+    anchors = np.asarray(
+        [("pivot_kws : ", "method : "), ("{row,col}_colors : ", "mask : bool")]
+    )
+
+    points = np.zeros(anchors.shape, dtype=int)
+    for i, tup in enumerate(anchors):
+        for j, p in enumerate(tup):
+            try:
+                x = docs.index(p)
+            except ValueError:
+                print(error_msg)
+                return
+            points[i, j] = x
+
+    add_docs1 = """config : str, optional
+            EXTENSION!
+            One of two pre-defined configurations: "abs", "zscore".
+            These two configurations provide custom default keyword arguments
+            compared with the native seaborn function and several adjustments to
+            figure and axis sizes, labels and other objects.
+            Options:
+             - "abs": good for non-negative data.
+             - "zscore": good for real data with variables with very different means.
+            Other keyword arguments affected (only is not provided):
+             - {x,y}ticklabels: will turn off if more than 120 items in each axis.
+             - dendrogram_ratio: will adjust, given relative shape of data.
+        """
+    add_docs2 = """{row,col}_colors : list-like or pandas DataFrame/Series, optional
+            EXTENSION!
+            List of colors to label for either the rows or columns. Useful to
+            evaluate whether samples within a group are clustered together. Can
+            use nested lists or DataFrame for multiple color levels of labeling.
+            If given as a DataFrame or Series, labels for the colors are extracted
+            from the DataFrames column names or from the name of the Series.
+            DataFrame/Series colors are also matched to the data by their
+            index, ensuring colors are drawn in the correct order.
+
+            TODO: complete defining new behavious
+        {row,col}_colors_cmaps:
+            EXTENSION!
+            TODO: describe
+        """
+    clustermap.__doc__ = (
+        docs[: points[0][0]]
+        + add_docs1
+        + docs[points[0][1] : points[1][0]]
+        + add_docs2
+        + docs[points[1][1] :]
+    )
 
 
-clustermap.__doc__ = (
-    docs[:start1] + add_docs1 + docs[end1:start2] + add_docs2 + docs[end2:]
-)
+_add_docs_to_clustermap()
 
 
 def colorbar_decorator(f: Callable) -> Callable:

@@ -70,6 +70,7 @@ def _get_empty_stat_results(
             mm = mm.rename(columns={x: hue})
             mm = mm.append(data.groupby(hue)[y].median().reset_index())
             mm = mm.append(data.groupby([x, hue])[y].median().reset_index()).fillna("-")
+            # mm = mm.append(data.groupby([x, hue])[y].std().reset_index()).fillna("-")
         for col in ["A", "B"]:
             stat = stat.merge(
                 mm.rename(
