@@ -1,7 +1,8 @@
-"""Main module."""
+"""
+A type of plot that combines swarms and box(en)/bar plots in an overlaid fashion.
+"""
 
-
-from typing import Any, Tuple, Sequence, Union, Dict, Optional
+import typing as tp
 import itertools
 import warnings
 
@@ -13,94 +14,27 @@ import seaborn as sns
 import pingouin as pg
 
 from seaborn_extensions.types import DataFrame, Axis, Figure, Iterables
-from seaborn_extensions.utils import get_grid_dims
-
-
-def add_transparency_to_plot(ax: Axis, alpha: float = 0.25, kind: str = "boxen") -> None:
-
-    objs = (
-        (
-            matplotlib.collections.PatchCollection,
-            matplotlib.collections.PathCollection,
-        )
-        if kind == "boxen"
-        else (matplotlib.patches.Rectangle)
-    )
-
-    for x in ax.get_children():
-        if isinstance(x, objs):
-            x.set_alpha(alpha)
-
-
-def _get_empty_stat_results(
-    data: DataFrame,
-    x: str,
-    y: str,
-    hue: Optional[str] = None,
-    add_median: bool = True,
-) -> DataFrame:
-    stat = pd.DataFrame(
-        itertools.combinations(data[x].drop_duplicates(), 2),
-        columns=["A", "B"],
-    )
-    stat["Contrast"] = x
-    if hue is not None:
-        huestat = pd.DataFrame(
-            itertools.combinations(data[hue].drop_duplicates(), 2),
-            columns=["A", "B"],
-        )
-        huestat["Contrast"] = hue
-        to_append = [huestat]
-        for v in data[x].unique():
-            n = huestat.copy()
-            n[x] = v
-            n["Contrast"] = f"{x} * {hue}"
-            to_append.append(n)
-        stat = (
-            stat.append(to_append, ignore_index=True)
-            .fillna("-")
-            .sort_values([x, "A", "B"])
-        )
-    stat["Tested"] = False
-    stat["p-unc"] = np.nan
-
-    if add_median:
-        mm = data.groupby(x)[y].median().reset_index()
-        if hue is not None:
-            mm = mm.rename(columns={x: hue})
-            mm = mm.append(data.groupby(hue)[y].median().reset_index())
-            mm = mm.append(data.groupby([x, hue])[y].median().reset_index()).fillna("-")
-            # mm = mm.append(data.groupby([x, hue])[y].std().reset_index()).fillna("-")
-        for col in ["A", "B"]:
-            stat = stat.merge(
-                mm.rename(
-                    columns={
-                        hue if hue is not None else x: f"{col}",
-                        y: f"median_{col}",
-                    }
-                ),
-                how="left",
-            )
-    return stat
+from seaborn_extensions.utils import get_grid_dims, filter_kwargs_by_callable
 
 
 def swarmboxenplot(
     data: DataFrame,
     x: str,
-    y: Union[str, Iterables],
+    y: tp.Union[str, Iterables],
     hue: str = None,
     swarm: bool = True,
     boxen: bool = True,
     bar: bool = False,
-    ax: Union[Axis, Sequence[Axis]] = None,
+    ax: tp.Union[Axis, tp.Sequence[Axis]] = None,
     test: bool = True,
-    multiple_testing: Union[bool, str] = "fdr_bh",
+    multiple_testing: tp.Union[bool, str] = "fdr_bh",
     test_upper_threshold: float = 0.05,
     test_lower_threshold: float = 0.01,
     plot_non_significant: bool = False,
-    plot_kws: Dict[str, Any] = None,
-    test_kws: Dict[str, Any] = None,
-) -> Optional[Union[Figure, DataFrame, Tuple[Figure, DataFrame]]]:
+    plot_kws: tp.Dict[str, tp.Any] = None,
+    test_kws: tp.Dict[str, tp.Any] = None,
+    fig_kws: tp.Dict[str, tp.Any] = None,
+) -> tp.Optional[tp.Union[Figure, DataFrame, tp.Tuple[Figure, DataFrame]]]:
     """
     A categorical plot that overlays individual observations
     as a swarm plot and summary statistics about them in a boxen plot.
@@ -188,9 +122,11 @@ def swarmboxenplot(
         # TODO: display only one legend for hue
         if ax is None:
             n, m = get_grid_dims(y)
-            fig, axes = plt.subplots(
-                n, m, figsize=(m * 4, n * 4), sharex=True, squeeze=False
+            default_fig_kws = dict(
+                nrows=n, ncols=m, figsize=(m * 4, n * 4), sharex=True, squeeze=False
             )
+            default_fig_kws.update(fig_kws or {})
+            fig, axes = plt.subplots(**default_fig_kws)
             axes = axes.flatten()
         else:
             if isinstance(ax, np.ndarray):
@@ -228,7 +164,11 @@ def swarmboxenplot(
             cols = [c for c in stats.columns if c != "Variable"]
             stats = stats.reindex(["Variable"] + cols, axis=1)
 
-            # if stats.shape == len(y): correct
+            # If there is just one test per `y` (no hue), correct p-values
+            if stats.shape == len(y):
+                stats["p-cor"] = pg.multicomp(
+                    stats["p-unc"].values, method=multiple_testing
+                )[1]
         if ax is None:
             return (fig, stats) if test else fig
         return stats if test else None
@@ -240,24 +180,29 @@ def swarmboxenplot(
         fig, _ax = plt.subplots(1, 1, figsize=(4, 4))
     else:
         _ax = ax
+
+    # Plot vanilla seaborn
     if boxen:
         assert not bar
         # Tmp fix for lack of support for Pandas Int64 in boxenplot:
         if data[y].dtype.name == "Int64":
             data[y] = data[y].astype(float)
-
-        sns.boxenplot(data=data, x=x, y=y, hue=hue, ax=_ax, **plot_kws)
+        boxen_kws = filter_kwargs_by_callable(plot_kws, sns.boxenplot)
+        sns.boxenplot(data=data, x=x, y=y, hue=hue, ax=_ax, **boxen_kws)
     if bar:
         assert not boxen
-        sns.barplot(data=data, x=x, y=y, hue=hue, ax=_ax, **plot_kws)
+        bar_kws = filter_kwargs_by_callable(plot_kws, sns.barplot)
+        sns.barplot(data=data, x=x, y=y, hue=hue, ax=_ax, **bar_kws)
+
     if (boxen or bar) and swarm:
-        add_transparency_to_plot(_ax, kind="bar" if bar else "boxen")
+        _add_transparency_to_plot(_ax, kind="bar" if bar else "boxen")
     if swarm:
-        if hue is not None and "dodge" not in plot_kws:
-            plot_kws["dodge"] = True
+        swarm_kws = filter_kwargs_by_callable(plot_kws, sns.swarmplot)
+        if hue is not None and "dodge" not in swarm_kws:
+            swarm_kws["dodge"] = True
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=UserWarning)
-            sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **plot_kws)
+            sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **swarm_kws)
     _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90, ha="right")
 
     if test:
@@ -377,3 +322,71 @@ def swarmboxenplot(
         _ax.set_ylim(ylim)
         return (fig, stat) if ax is None else stat
     return fig if ax is None else None
+
+
+def _add_transparency_to_plot(ax: Axis, alpha: float = 0.25, kind: str = "boxen") -> None:
+
+    objs = (
+        (
+            matplotlib.collections.PatchCollection,
+            matplotlib.collections.PathCollection,
+        )
+        if kind == "boxen"
+        else (matplotlib.patches.Rectangle)
+    )
+
+    for x in ax.get_children():
+        if isinstance(x, objs):
+            x.set_alpha(alpha)
+
+
+def _get_empty_stat_results(
+    data: DataFrame,
+    x: str,
+    y: str,
+    hue: tp.Optional[str] = None,
+    add_median: bool = True,
+) -> DataFrame:
+    stat = pd.DataFrame(
+        itertools.combinations(data[x].drop_duplicates(), 2),
+        columns=["A", "B"],
+    )
+    stat["Contrast"] = x
+    if hue is not None:
+        huestat = pd.DataFrame(
+            itertools.combinations(data[hue].drop_duplicates(), 2),
+            columns=["A", "B"],
+        )
+        huestat["Contrast"] = hue
+        to_append = [huestat]
+        for v in data[x].unique():
+            n = huestat.copy()
+            n[x] = v
+            n["Contrast"] = f"{x} * {hue}"
+            to_append.append(n)
+        stat = (
+            stat.append(to_append, ignore_index=True)
+            .fillna("-")
+            .sort_values([x, "A", "B"])
+        )
+    stat["Tested"] = False
+    stat["p-unc"] = np.nan
+
+    if add_median:
+        mm = data.groupby(x)[y].median().reset_index()
+        if hue is not None:
+            mm = mm.rename(columns={x: hue})
+            mm = mm.append(data.groupby(hue)[y].median().reset_index())
+            mm = mm.append(data.groupby([x, hue])[y].median().reset_index()).fillna("-")
+            # mm = mm.append(data.groupby([x, hue])[y].std().reset_index()).fillna("-")
+        for col in ["A", "B"]:
+            stat = stat.merge(
+                mm.rename(
+                    columns={
+                        hue if hue is not None else x: f"{col}",
+                        y: f"median_{col}",
+                    }
+                ),
+                how="left",
+            )
+    return stat
