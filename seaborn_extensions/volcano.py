@@ -1,3 +1,5 @@
+import typing as tp
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -11,6 +13,7 @@ def volcano_plot(
     diff_threshold: float = 0.05,
     n_top: int = None,
     invert_direction: bool = True,
+    fig_kws: tp.Dict = None,
 ) -> Figure:
     """
     Assumes stats dataframe from seaborn_extensions.swarmboxenplot:
@@ -31,7 +34,9 @@ def volcano_plot(
     stats["logp-cor"] = -np.log10(stats["p-cor"].fillna(1))
     stats["p-cor-plot"] = (stats["logp-cor"] / stats["logp-cor"].max()) * 5
     n, m = get_grid_dims(combs.shape[0])
-    fig, axes = plt.subplots(n, m, figsize=(4 * m, 4 * n), squeeze=False)
+    default_kws = dict(nrows=n, ncols=m, figsize=(4 * m, 4 * n), squeeze=False)
+    default_kws.update(fig_kws or {})
+    fig, axes = plt.subplots(**default_kws)
     idx = -1
     for idx, (a, b) in combs.iterrows():
         ax = axes.flatten()[idx]
