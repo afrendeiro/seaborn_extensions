@@ -377,7 +377,10 @@ def _get_empty_stat_results(
         if hue is not None:
             mm = mm.rename(columns={x: hue})
             mm = mm.append(data.groupby(hue)[y].median().reset_index())
-            mm = mm.append(data.groupby([x, hue])[y].median().reset_index()).fillna("-")
+            _p = data.groupby([x, hue])[y].median().reset_index()
+            # remove categories if existing (workaround):
+            _p = pd.DataFrame(_p.values, index=_p.index, columns=_p.columns)
+            mm = mm.append(_p).fillna("-")
             # mm = mm.append(data.groupby([x, hue])[y].std().reset_index()).fillna("-")
         for col in ["A", "B"]:
             stat = stat.merge(
