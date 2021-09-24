@@ -128,9 +128,10 @@ def swarmboxenplot(
             default_fig_kws.update(fig_kws or {})
             fig, axes = plt.subplots(**default_fig_kws)
             axes = axes.flatten()
-        else:
-            if isinstance(ax, np.ndarray):
-                axes = ax.flatten()
+        elif isinstance(ax, np.ndarray):
+            axes = ax.flatten()
+        elif isinstance(ax, matplotlib.axes.Axes):
+            axes = np.asarray([ax])
 
         _stats = list()
         idx = -1
