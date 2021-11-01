@@ -26,7 +26,7 @@ def swarmboxenplot(
     boxen: bool = True,
     bar: bool = False,
     ax: tp.Union[Axis, tp.Sequence[Axis]] = None,
-    test: bool = True,
+    test: tp.Union[bool, str] = "mann-whitney",
     multiple_testing: tp.Union[bool, str] = "fdr_bh",
     test_upper_threshold: float = 0.05,
     test_lower_threshold: float = 0.01,
@@ -62,9 +62,14 @@ def swarmboxenplot(
         Whether to plot summary statistics as a boxenplot.
     ax: matplotlib.axes.Axes, optional
         An optional axes to draw in.
-    test: bool
+    test: bool | str
         Whether to test differences between observation groups.
         If `False`, will not return a dataframe as well.
+        If a string is passed, will perform test accordingly. Available tests:
+            - 't-test':
+            - 'mann-whitney':
+            - 'kruskal':
+        Default is a parwise 'mann-whitney' test with p-value adjustment.
     multiple_testing: str
         Method for multiple testing correction.
     test_upper_threshold: float
@@ -85,10 +90,9 @@ def swarmboxenplot(
     -------
     tuple[Figure, pandas.DataFrame]:
         if `ax` is None and `test` is True.
-    pandas.DataFrame:
-        if `ax` is not None.
-    Figure:
-        if `test` is False.
+
+        pandas.DataFrame: if `ax` is not None.
+        Figure: if `test` is False.
     None:
         if `test` is False and `ax` is not None.
 
@@ -112,13 +116,13 @@ def swarmboxenplot(
                 )
 
     if test_kws is None:
-        test_kws = dict(parametric=False)
+        test_kws = dict()
     if plot_kws is None:
         plot_kws = dict()
 
     data = data.sort_values([x] + ([hue] if hue is not None else []))
 
-    if not isinstance(y, str):
+    if isinstance(y, (list, pd.Series, pd.Index)):
         # TODO: display only one legend for hue
         if ax is None:
             n, m = get_grid_dims(y)
@@ -154,13 +158,13 @@ def swarmboxenplot(
                 plot_kws=plot_kws,
                 test_kws=test_kws,
             )
-            _ax.set(title=_var, xlabel=None, ylabel=None)
-            if test:
+            _ax.set(title=_var + _ax.get_title(), xlabel=None, ylabel=None)
+            if test is not False:
                 _stats.append(s.assign(Variable=_var))
         # "close" excess subplots
         for _ax in axes[idx + 1 :]:
             _ax.axis("off")
-        if test:
+        if test is not False:
             stats = pd.concat(_stats).reset_index(drop=True)
             cols = [c for c in stats.columns if c != "Variable"]
             stats = stats.reindex(["Variable"] + cols, axis=1)
@@ -206,7 +210,17 @@ def swarmboxenplot(
             sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **swarm_kws)
     _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90, ha="right")
 
-    if test:
+    if test is not False:
+
+        if test in [True, "t-test", "mann-whitney"]:
+            test_function = pg.pairwise_ttests
+            if test == "mann-whitney":
+                test_kws["parametric"] = False
+        elif test in ["kruskal"]:
+            test_function = pg.kruskal
+            assert hue is None, "If test is 'kruskal', 'hue' must be None."
+        else:
+            raise ValueError(f"Test type '{test}' not recognized.")
         #
         if not data.index.is_unique:
             print("Warning: dataframe contains a duplicated index.")
@@ -240,23 +254,36 @@ def swarmboxenplot(
             .reset_index(drop=True)
         )
         try:
-            _stat = pg.pairwise_ttests(
+            _stat = test_function(
                 data=datat,
                 dv=y,
                 between=x if hue is None else [x, hue],
                 **test_kws,
             )
-            stat = _stat.merge(
-                stat[
-                    ["Contrast", "A", "B", "median_A", "median_B"]
-                    + ([x] if hue is not None else [])
-                ],
-                how="left",
-            )
         except (AssertionError, ValueError) as e:
             print(str(e))
         except KeyError:
             print("Only one category with values!")
+
+        if test == "kruskal":
+            p = _stat.squeeze()["p-unc"]
+            symbol = (
+                "**"
+                if p <= test_lower_threshold
+                else "n.s."
+                if ((p > test_upper_threshold) or pd.isnull(p))
+                else "*"
+            )
+            _ax.set_title(symbol)
+            return (fig, _stat) if ax is None else _stat
+
+        stat = _stat.merge(
+            stat[
+                ["Contrast", "A", "B", "median_A", "median_B"]
+                + ([x] if hue is not None else [])
+            ],
+            how="left",
+        )
         if multiple_testing is not False:
             if "p-unc" not in stat.columns:
                 stat["p-unc"] = np.nan

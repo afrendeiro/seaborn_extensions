@@ -36,12 +36,8 @@ def data_simple_long_nodiff():
 
 @pytest.fixture
 def data_simple_long_diff(data_simple_long_nodiff):
-    data_simple_long_nodiff.loc[
-        data_simple_long_nodiff["cat"] == "b", "cont"
-    ] *= 5
-    data_simple_long_nodiff.loc[
-        data_simple_long_nodiff["cat"] == "c", "cont"
-    ] -= 5
+    data_simple_long_nodiff.loc[data_simple_long_nodiff["cat"] == "b", "cont"] *= 5
+    data_simple_long_nodiff.loc[data_simple_long_nodiff["cat"] == "c", "cont"] -= 5
     return data_simple_long_nodiff
 
 
@@ -124,11 +120,7 @@ def data_complex_missing():
 
 
 def has_significant(fig):
-    t = [
-        c
-        for c in fig.axes[0].get_children()
-        if isinstance(c, matplotlib.text.Text)
-    ]
+    t = [c for c in fig.axes[0].get_children() if isinstance(c, matplotlib.text.Text)]
     tt = [e for e in t if e.get_text() in ["*", "**"]]
     return bool(t) and bool(tt)
 
@@ -229,9 +221,7 @@ class TestSwarmBoxenPlot:
         assert not has_significant(fig)
 
         with pytest.raises(ValueError):
-            fig, stats = swarmboxenplot(
-                data=data, x="x", y=["y1", "y2"], hue="y3"
-            )
+            fig, stats = swarmboxenplot(data=data, x="x", y=["y1", "y2"], hue="y3")
         with pytest.raises(ValueError):
             fig, stats = swarmboxenplot(data=data, x="y1", y="y2")
 
@@ -259,3 +249,23 @@ class TestSwarmBoxenPlot:
             test_kws=dict(parametric=False),
         )
         assert has_significant(fig)
+
+    def test_kruskal_simple(self, data_simple_diff):
+        fig, stats = swarmboxenplot(
+            data=data_simple_diff, x="cat", y="cont", test="kruskal"
+        )
+        assert stats.shape[0] == 1
+        assert stats.index[0] == "Kruskal"
+        assert stats.squeeze()["p-unc"] < 1e-2
+        assert fig.axes[0].get_title() == "**"
+
+    def test_kruskal_simple(self, data_complex_missing):
+        data = data_complex_missing
+        fig, stats = swarmboxenplot(
+            data=data, x="x", y=["y1", "y2", "y3"], test="kruskal"
+        )
+
+        assert (stats["Variable"] == pd.Series(["y1", "y2", "y3"])).all()
+        assert fig.axes[0].get_title() == "y1**"
+        assert fig.axes[1].get_title() == "y2**"
+        assert fig.axes[2].get_title() == "y3**"
