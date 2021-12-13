@@ -34,6 +34,10 @@ def clustermap(*args, **kwargs):
     # # Size of figure
     if "figsize" not in kwargs:
         kwargs["figsize"] = (10, 10)
+    else:
+        if "square" in kwargs:
+            if kwargs["square"] is True:
+                print("`square` shape requested but `figsize` given. Ignoring `figsize`.")
     if kwargs["figsize"] == (10, 10):  # default value
         # assumes pivot_kws is not used...
         # would depend on x/y-ticklabel size...
@@ -60,15 +64,13 @@ def clustermap(*args, **kwargs):
         s = kwargs["figsize"][smallest] * d
         dar = tuple(d if i == smallest else s / kwargs["figsize"][i] for i in range(2))
 
-    if "cbar_kws" not in kwargs:
-        kwargs["cbar_kws"] = dict()
-
-    if smallest == 0:
-        kwargs["cbar_kws"].update(dict(aspect=20 / aspect))
-
     # # non-Z-score mode:
     nz_default_kws = dict(
-        cmap="Reds", robust=True, dendrogram_ratio=dar, metric="correlation"
+        cmap="Reds",
+        robust=True,
+        dendrogram_ratio=dar,
+        metric="correlation",
+        square=True,
     )
     # # Z-score mode:
     zs_default_kws = dict(
@@ -76,8 +78,10 @@ def clustermap(*args, **kwargs):
         center=0,
         cmap="RdBu_r",
         robust=True,
+        cbar_kws=dict(label="Z-score"),
         dendrogram_ratio=dar,
         metric="correlation",
+        square=True,
     )
     if "config" in kwargs:
         default_kws = (
@@ -90,6 +94,25 @@ def clustermap(*args, **kwargs):
             if k not in kwargs:
                 kwargs[k] = v
         del kwargs["config"]
+    if "cbar_kws" not in kwargs:
+        kwargs["cbar_kws"] = dict()
+    if smallest == 0:
+        kwargs["cbar_kws"].update(dict(aspect=20 / aspect))
+
+    # Square
+    if "square" in kwargs:
+        if kwargs["square"] is True:
+            dw, dh = args[0].shape[::-1]
+            dw *= 0.15
+            dh *= 0.15
+            th, tw = (
+                args[0].index.to_series().astype(str).apply(len).max(),
+                args[0].columns.to_series().astype(str).apply(len).max(),
+            )
+            tw *= 0.15
+            th *= 0.15
+            kwargs["figsize"] = (3 + dw + tw, 3 + dh + th)
+        del kwargs["square"]
 
     # Annotations:
     cmaps = {"row": None, "col": None}
@@ -127,12 +150,13 @@ def clustermap(*args, **kwargs):
 
     # Add the colorbar legends to the figure
     _add_colorbars(grid, **_kwargs, row_cmaps=cmaps["row"], col_cmaps=cmaps["col"])
+
     # Some niceties
-    # if grid.ax_heatmap.get_xlabel() in ["", None]:
     ax = grid.ax_heatmap
     ax.set_xlabel(f"{ax.get_xlabel()}\n(n = {data.shape[1]})")
-    # if ax.get_ylabel() in ["", None]:
     ax.set_ylabel(f"{ax.get_ylabel()}\n(n = {data.shape[0]})")
+    ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
 
     # Convert numeric p-value annotation to text
     if "pvalues" in kwargs:
@@ -249,7 +273,11 @@ def _add_docs_to_clustermap():
 
     docs = sns.clustermap.__doc__
     anchors = np.asarray(
-        [("pivot_kws : ", "method : "), ("{row,col}_colors : ", "mask : bool")]
+        [
+            ("pivot_kws : ", "method : "),
+            ("{row,col}_colors : ", "mask : bool"),
+            ("kwargs : other keyword arguments", "Returns"),
+        ]
     )
 
     points = np.zeros(anchors.shape, dtype=int)
@@ -263,39 +291,55 @@ def _add_docs_to_clustermap():
             points[i, j] = x
 
     add_docs1 = """config : str, optional
-            EXTENSION!
-            One of two pre-defined configurations: "abs", "zscore".
-            These two configurations provide custom default keyword arguments
-            compared with the native seaborn function and several adjustments to
-            figure and axis sizes, labels and other objects.
-            Options:
-             - "abs": good for non-negative data.
-             - "zscore": good for real data with variables with very different means.
-            Other keyword arguments affected (only is not provided):
-             - {x,y}ticklabels: will turn off if more than 120 items in each axis.
-             - dendrogram_ratio: will adjust, given relative shape of data.
-        """
+        EXTENSION!
+        One of two pre-defined configurations: "abs", "zscore".
+        These two configurations provide custom default keyword arguments
+        compared with the native seaborn function and several adjustments to
+        figure and axis sizes, labels and other objects.
+        Options:
+         - "abs": good for non-negative data.
+         - "zscore": good for real data with variables with very different means.
+        Other keyword arguments affected (only is not provided):
+         - {x,y}ticklabels: will turn off if more than 120 items in each axis.
+         - dendrogram_ratio: will adjust, given relative shape of data.
+    """
     add_docs2 = """{row,col}_colors : list-like or pandas DataFrame/Series, optional
-            EXTENSION!
-            List of colors to label for either the rows or columns. Useful to
-            evaluate whether samples within a group are clustered together. Can
-            use nested lists or DataFrame for multiple color levels of labeling.
-            If given as a DataFrame or Series, labels for the colors are extracted
-            from the DataFrames column names or from the name of the Series.
-            DataFrame/Series colors are also matched to the data by their
-            index, ensuring colors are drawn in the correct order.
+        EXTENSION!
+        List of colors to label for either the rows or columns. Useful to
+        evaluate whether samples within a group are clustered together. Can
+        use nested lists or DataFrame for multiple color levels of labeling.
+        If given as a DataFrame or Series, labels for the colors are extracted
+        from the DataFrames column names or from the name of the Series.
+        DataFrame/Series colors are also matched to the data by their
+        index, ensuring colors are drawn in the correct order.
 
-            TODO: complete defining new behavious
-        {row,col}_colors_cmaps:
-            EXTENSION!
-            TODO: describe
-        """
+        TODO: complete defining new behavious
+    {row,col}_colors_cmaps:
+        EXTENSION!
+        Colormaps to be used for the variables provided in `{row,col}_colors`.
+    """
+    add_docs3 = """pvalues : pandas DataFrame, optional
+        EXTENSION!
+        A dataframe matching the input shape, where the values are p-values.
+        Values 0.05 > p > 0.01 will be labeled with '*'.
+        Values p < 0.01 will be labeled with '**'.
+        Values p >= 0.05 will not be labeled.
+        This will be overlaid as text on top of the heatmap.
+        If providing `pvalues`, `annot` cannot be used.
+    square: bool, optional
+        EXTENSION!
+        Try to make the shape of the figure as square as possible.
+        If used, `figsize` will be ignored.
+
+    """
     clustermap.__doc__ = (
         docs[: points[0][0]]
         + add_docs1
         + docs[points[0][1] : points[1][0]]
         + add_docs2
-        + docs[points[1][1] :]
+        + docs[points[1][1] : points[2][0]]
+        + add_docs3
+        + docs[points[2][1] :]
     )
 
 
