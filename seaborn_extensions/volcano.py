@@ -9,8 +9,8 @@ from seaborn_extensions.utils import get_grid_dims
 
 def volcano_plot(
     stats: DataFrame,
-    annotate_text: bool = True,
-    diff_threshold: float = 0.05,
+    annotate_text: tp.Union[bool, tp.Sequence[str]] = True,
+    diff_threshold: tp.Optional[float] = 0.05,
     n_top: int = None,
     invert_direction: bool = True,
     fig_kws: tp.Dict = None,
@@ -28,6 +28,8 @@ def volcano_plot(
     else:
         assert n_top is not None
 
+    stats["A"] = stats["A"].astype(str)
+    stats["B"] = stats["B"].astype(str)
     combs = stats[["A", "B"]].drop_duplicates().reset_index(drop=True)
     if invert_direction:
         stats["hedges"] *= -1  # convert to B / A which is often more intuitive
@@ -58,12 +60,13 @@ def volcano_plot(
             cmap="coolwarm",
             vmin=-v,
             vmax=v,
+            rasterized=True,
         )
         ax.set(title=f"{b} / {a}", ylabel=None, xlabel=None)
         if annotate_text is not False:
             if annotate_text is True:
                 if diff_threshold is not None:
-                    ts = p.query("`p-cor` < 0.05").index
+                    ts = p.query(f"`p-cor` < {diff_threshold}").index
                 else:
                     ts = p.sort_values("p-unc").head(n_top).index
             else:
@@ -73,7 +76,7 @@ def volcano_plot(
                     p.loc[t, "hedges"],
                     p.loc[t, "logp-unc"],
                     s=p.loc[t, "Variable"],
-                    ha="right" if p.loc[t, "hedges"] > 0 else "left",
+                    ha="left" if p.loc[t, "hedges"] > 0 else "right",
                 )
     for ax in axes.flatten()[idx + 1 :]:
         ax.axis("off")
