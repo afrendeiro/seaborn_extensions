@@ -203,7 +203,14 @@ def _add_extra_colorbars_to_clustermap(
                 label=data.name,
             )
             cbar.set_ticks(res.drop_duplicates().sort_values() / res.max())
-            cbar.set_ticklabels(data.value_counts().sort_index().index)
+            if orientation == "vertical":
+                cbar.ax.set_xticklabels(
+                    data.value_counts().sort_index().index, rotation=0
+                )
+            else:
+                cbar.ax.set_xticklabels(
+                    data.value_counts().sort_index().index, rotation=90
+                )
 
     offset = 1 if location == "row" else 0
 
