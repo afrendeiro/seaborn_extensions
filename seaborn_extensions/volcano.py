@@ -3,7 +3,7 @@ import typing as tp
 import numpy as np
 import matplotlib.pyplot as plt
 
-from seaborn_extensions.types import Figure, DataFrame
+from seaborn_extensions.types import Figure, Axis, DataFrame
 from seaborn_extensions.utils import get_grid_dims
 
 
@@ -14,7 +14,7 @@ def volcano_plot(
     n_top: int = None,
     invert_direction: bool = True,
     fig_kws: tp.Dict = None,
-    axes: tp.Sequence["Axis"] = None,
+    axes: tp.Sequence[Axis] = None,
 ) -> Figure:
     """
     Assumes stats dataframe from seaborn_extensions.swarmboxenplot:

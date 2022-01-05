@@ -262,8 +262,10 @@ def swarmboxenplot(
             )
         except (AssertionError, ValueError) as e:
             print(str(e))
+            _stat = stat
         except KeyError:
             print("Only one category with values!")
+            _stat = stat
 
         if test == "kruskal":
             p = _stat.squeeze()["p-unc"]

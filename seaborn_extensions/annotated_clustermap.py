@@ -321,7 +321,7 @@ def _add_docs_to_clustermap():
         index, ensuring colors are drawn in the correct order.
 
         TODO: complete defining new behavious
-    {row,col}_colors_cmaps:
+    {row,col}_colors_cmaps: Sequence[str]
         EXTENSION!
         Colormaps to be used for the variables provided in `{row,col}_colors`.
     """
