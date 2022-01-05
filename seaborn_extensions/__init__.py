@@ -73,3 +73,4 @@ from seaborn_extensions.annotated_clustermap import (
     clustermap,
 )
 from seaborn_extensions.volcano import volcano_plot
+from seaborn_extensions.rankplot import rankplot
