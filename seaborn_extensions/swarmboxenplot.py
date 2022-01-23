@@ -239,17 +239,16 @@ def swarmboxenplot(
         # # get empty dataframe in case nothing can be calculated
         stat = _get_empty_stat_results(datat, x, y, hue, add_median=True)
         # # mirror groups to account for own pingouin order
+        tats = stat.rename(
+            columns={
+                "B": "A",
+                "A": "B",
+                "median_A": "median_B",
+                "median_B": "median_A",
+            }
+        )
         stat = (
-            stat.append(
-                stat.rename(
-                    columns={
-                        "B": "A",
-                        "A": "B",
-                        "median_A": "median_B",
-                        "median_B": "median_A",
-                    }
-                )
-            )
+            pd.concat([stat, tats])
             .sort_values(["Contrast", "A", "B"])
             .reset_index(drop=True)
         )
