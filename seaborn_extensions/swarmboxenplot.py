@@ -25,6 +25,7 @@ def swarmboxenplot(
     swarm: bool = True,
     boxen: bool = True,
     bar: bool = False,
+    orient: str = "vertical",
     ax: tp.Union[Axis, tp.Sequence[Axis]] = None,
     test: tp.Union[bool, str] = "mann-whitney",
     to_test: str = "all",
@@ -61,16 +62,28 @@ def swarmboxenplot(
         Whether to plot individual observations as a swarmplot.
     boxen: bool
         Whether to plot summary statistics as a boxenplot.
+    bar: bool
+        Whether to plot summary statistics as a barplot.
+    orient: str
+        Whether the plot should be oriented horizontally or vertically with relation to the numeric values `y`.
+            - 'vertical': y-axis is `y` variable (numeric).
+            - 'horizontal': x-axis is `y` variable (numeric).
+        Default is 'vertical'.
     ax: matplotlib.axes.Axes, optional
         An optional axes to draw in.
     test: bool | str
         Whether to test differences between observation groups.
         If `False`, will not return a dataframe as well.
         If a string is passed, will perform test accordingly. Available tests:
-            - 't-test':
-            - 'mann-whitney':
-            - 'kruskal':
+            - 't-test'
+            - 'mann-whitney'
+            - 'kruskal'
         Default is a parwise 'mann-whitney' test with p-value adjustment.
+    to_test: str
+        Whether to test all possible combinations or just within `hue` groups for each `x`.
+        Only relevant when `hue` is not None.
+            - 'all': a model "y ~ x * hue", i.e. test between `x` groups, and within `hue` for each `x`.
+            - 'hue': a model "y ~ x | hue", i.e. test within `hue` for each `x`.
     multiple_testing: str
         Method for multiple testing correction.
     test_upper_threshold: float
@@ -150,6 +163,7 @@ def swarmboxenplot(
                 swarm=swarm,
                 boxen=boxen,
                 bar=bar,
+                orient=orient,
                 ax=_ax,
                 test=test,
                 to_test=to_test,
@@ -188,6 +202,13 @@ def swarmboxenplot(
     else:
         _ax = ax
 
+    horizontal = orient in ["horizontal", "horiz", "h"]
+    if horizontal:
+        x2 = y
+        y2 = x
+        x = x2
+        y = y2
+
     # Plot vanilla seaborn
     if boxen:
         assert not bar
@@ -210,12 +231,21 @@ def swarmboxenplot(
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=UserWarning)
             sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **swarm_kws)
-    _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90, ha="right")
+    if horizontal:
+        _ax.set_yticklabels(_ax.get_yticklabels(), rotation=0, ha="right")
+    else:
+        _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90, ha="right")
 
     if test is False:
         return fig if ax is None else None
 
-    # Test
+    # Perform testing
+    if horizontal:
+        x2 = y
+        y2 = x
+        x = x2
+        y = y2
+
     if test in [True, "t-test", "mann-whitney"]:
         test_function = pg.pairwise_ttests
         if test == "mann-whitney":
@@ -314,7 +344,10 @@ def swarmboxenplot(
         order = {
             k: (float(i) / nhues) - (1 / nhues) - 0.05 for i, k in enumerate(mm.index)
         }
-    _ax.scatter(order.values(), mm, alpha=0, color="white")
+    if horizontal:
+        _ax.scatter(mm, order.values(), alpha=0, color="white")
+    else:
+        _ax.scatter(order.values(), mm, alpha=0, color="white")
 
     # # Plot significance bars
     # # # start at top of the plot and progressively decrease sig. bar downwards
@@ -348,13 +381,20 @@ def swarmboxenplot(
         else:
             xx = (order[row["A"]], order[row["B"]])
 
-        _ax.plot(
-            (0.35 + xx[0], 0.35 + xx[1] - 0.25),
-            (py, py),
+        _tp = (0.35 + xx[0], 0.35 + xx[1] - 0.25), (py, py)
+        _tp2 = xx[1] - 0.025, py
+        if horizontal:
+            _tp = _tp[::-1]
+            _tp2 = _tp2[::-1]
+
+        _ax.plot(*_tp, color="black", linewidth=1.2)
+        _ax.text(
+            *_tp2,
+            s=symbol,
             color="black",
-            linewidth=1.2,
+            ha="center",
+            rotation=90 if orient in ["horizontal", "horiz", "h"] else 0,
         )
-        _ax.text(xx[1] - 0.025, py, s=symbol, color="black", ha="center")
         py -= incr
     _ax.set_ylim(ylim)
     return (fig, stat) if ax is None else stat
