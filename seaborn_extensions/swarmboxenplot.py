@@ -27,6 +27,7 @@ def swarmboxenplot(
     bar: bool = False,
     ax: tp.Union[Axis, tp.Sequence[Axis]] = None,
     test: tp.Union[bool, str] = "mann-whitney",
+    to_test: str = "all",
     multiple_testing: tp.Union[bool, str] = "fdr_bh",
     test_upper_threshold: float = 0.05,
     test_lower_threshold: float = 0.01,
@@ -151,6 +152,7 @@ def swarmboxenplot(
                 bar=bar,
                 ax=_ax,
                 test=test,
+                to_test=to_test,
                 multiple_testing=multiple_testing,
                 test_upper_threshold=test_upper_threshold,
                 test_lower_threshold=test_lower_threshold,
@@ -210,150 +212,157 @@ def swarmboxenplot(
             sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **swarm_kws)
     _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90, ha="right")
 
-    if test is not False:
+    if test is False:
+        return fig if ax is None else None
 
-        if test in [True, "t-test", "mann-whitney"]:
-            test_function = pg.pairwise_ttests
-            if test == "mann-whitney":
-                test_kws["parametric"] = False
-        elif test in ["kruskal"]:
-            test_function = pg.kruskal
-            assert hue is None, "If test is 'kruskal', 'hue' must be None."
-        else:
-            raise ValueError(f"Test type '{test}' not recognized.")
-        #
-        if not data.index.is_unique:
-            print("Warning: dataframe contains a duplicated index.")
+    # Test
+    if test in [True, "t-test", "mann-whitney"]:
+        test_function = pg.pairwise_ttests
+        if test == "mann-whitney":
+            test_kws["parametric"] = False
+    elif test in ["kruskal"]:
+        test_function = pg.kruskal
+        assert hue is None, "If test is 'kruskal', 'hue' must be None."
+    else:
+        raise ValueError(f"Test type '{test}' not recognized.")
+    #
+    if not data.index.is_unique:
+        print("Warning: dataframe contains a duplicated index.")
 
-        # remove NaNs
-        datat = data.dropna(subset=[x, y] + ([hue] if hue is not None else []))
-        # remove categories with only one element
-        keep = datat.groupby(x).size()[datat.groupby(x).size() > 1].index
-        datat = datat.loc[datat[x].isin(keep), :]
-        if datat[x].dtype.name == "category":
-            datat[x] = datat[x].cat.remove_unused_categories()
-        ylim = _ax.get_ylim()  # save original axis boundaries for later
-        ylength = abs(ylim[1]) + (abs(ylim[0]) if ylim[0] < 0 else 0)
+    # # remove NaNs
+    datat = data.dropna(subset=[x, y] + ([hue] if hue is not None else []))
+    # # remove categories with only one element
+    keep = datat.groupby(x).size()[datat.groupby(x).size() > 1].index
+    datat = datat.loc[datat[x].isin(keep), :]
+    if datat[x].dtype.name == "category":
+        datat[x] = datat[x].cat.remove_unused_categories()
+    ylim = _ax.get_ylim()  # save original axis boundaries for later
+    ylength = abs(ylim[1]) + (abs(ylim[0]) if ylim[0] < 0 else 0)
 
-        # Now calculate stats
-        # # get empty dataframe in case nothing can be calculated
-        stat = _get_empty_stat_results(datat, x, y, hue, add_median=True)
-        # # mirror groups to account for own pingouin order
-        tats = stat.rename(
-            columns={
-                "B": "A",
-                "A": "B",
-                "median_A": "median_B",
-                "median_B": "median_A",
-            }
+    # # Now calculate stats
+    # # # get empty dataframe in case nothing can be calculated
+    stat = _get_empty_stat_results(datat, x, y, hue, add_median=True)
+
+    # # # mirror groups to account for own pingouin order
+    tats = stat.rename(
+        columns={
+            "B": "A",
+            "A": "B",
+            "median_A": "median_B",
+            "median_B": "median_A",
+        }
+    )
+    stat = (
+        pd.concat([stat, tats])
+        .sort_values(["Contrast", "A", "B"])
+        .reset_index(drop=True)
+    )
+    try:
+        _stat = test_function(
+            data=datat,
+            dv=y,
+            between=x if hue is None else [x, hue],
+            **test_kws,
         )
-        stat = (
-            pd.concat([stat, tats])
-            .sort_values(["Contrast", "A", "B"])
-            .reset_index(drop=True)
+    except (AssertionError, ValueError) as e:
+        print(str(e))
+        _stat = stat
+    except KeyError:
+        print("Only one category with values!")
+        _stat = stat
+
+    if test == "kruskal":
+        p = _stat.squeeze()["p-unc"]
+        symbol = (
+            "**"
+            if p <= test_lower_threshold
+            else "n.s."
+            if ((p > test_upper_threshold) or pd.isnull(p))
+            else "*"
         )
-        try:
-            _stat = test_function(
-                data=datat,
-                dv=y,
-                between=x if hue is None else [x, hue],
-                **test_kws,
-            )
-        except (AssertionError, ValueError) as e:
-            print(str(e))
-            _stat = stat
-        except KeyError:
-            print("Only one category with values!")
-            _stat = stat
+        _ax.set_title(symbol)
+        return (fig, _stat) if ax is None else _stat
 
-        if test == "kruskal":
-            p = _stat.squeeze()["p-unc"]
-            symbol = (
-                "**"
-                if p <= test_lower_threshold
-                else "n.s."
-                if ((p > test_upper_threshold) or pd.isnull(p))
-                else "*"
-            )
-            _ax.set_title(symbol)
-            return (fig, _stat) if ax is None else _stat
+    stat = _stat.merge(
+        stat[
+            ["Contrast", "A", "B", "median_A", "median_B"]
+            + ([x] if hue is not None else [])
+        ],
+        how="left",
+    ).convert_dtypes()
 
-        stat = _stat.merge(
-            stat[
-                ["Contrast", "A", "B", "median_A", "median_B"]
-                + ([x] if hue is not None else [])
-            ],
-            how="left",
-        )
-        if multiple_testing is not False:
-            if "p-unc" not in stat.columns:
-                stat["p-unc"] = np.nan
-            stat["p-cor"] = pg.multicomp(stat["p-unc"].values, method=multiple_testing)[1]
-            pcol = "p-cor"
-        else:
-            pcol = "p-unc"
+    if to_test == "hue":
+        stat = stat.loc[stat[x] != "-", :]
 
-        # This ensures there is a point for each `x` class and keep the order
-        # correct for below
-        mm = data.groupby([x] + ([hue] if hue is not None else []))[y].median()
-        if hue is None:
-            order = {k: float(i) for i, k in enumerate(mm.index)}
-        else:
-            nhues = data[hue].drop_duplicates().dropna().shape[0]
-            order = {
-                k: (float(i) / nhues) - (1 / nhues) - 0.05 for i, k in enumerate(mm.index)
-            }
-        _ax.scatter(order.values(), mm, alpha=0, color="white")
+    if multiple_testing is not False:
+        if "p-unc" not in stat.columns:
+            stat["p-unc"] = np.nan
+        stat["p-cor"] = pg.multicomp(
+            stat["p-unc"].astype(float).values, method=multiple_testing
+        )[1]
+        pcol = "p-cor"
+    else:
+        pcol = "p-unc"
 
-        # Plot significance bars
-        # start at top of the plot and progressively decrease sig. bar downwards
-        py = data[y].max()
-        incr = ylength / 100  # divide yaxis in 100 steps
-        for idx, row in stat.iterrows():
-            p = row[pcol]
-            if (pd.isnull(p) or (p > test_upper_threshold)) and (
-                not plot_non_significant
-            ):
-                py -= incr
-                continue
-            symbol = (
-                "**"
-                if p <= test_lower_threshold
-                else "n.s."
-                if ((p > test_upper_threshold) or pd.isnull(p))
-                else "*"
-            )
-            if hue is not None:
-                if row[x] != "-":
-                    xx = (order[(row[x], row["A"])], order[(row[x], row["B"])])
-                else:
-                    try:
-                        # TODO: get more accurate middle of group
-                        xx = (
-                            order[(row["A"], stat["A"].iloc[-1])] - (1 / nhues),
-                            order[(row["B"], stat["B"].iloc[-1])] - (1 / nhues),
-                        )
-                    except KeyError:
-                        # These are the hue groups without contrasting on 'x'
-                        continue
-            else:
-                xx = (order[row["A"]], order[row["B"]])
+    # Plot
+    # # This ensures there is a point for each `x` class and keep the order correct for below
+    mm = data.groupby([x] + ([hue] if hue is not None else []))[y].median()
+    if hue is None:
+        order = {k: float(i) for i, k in enumerate(mm.index)}
+    else:
+        nhues = data[hue].drop_duplicates().dropna().shape[0]
+        order = {
+            k: (float(i) / nhues) - (1 / nhues) - 0.05 for i, k in enumerate(mm.index)
+        }
+    _ax.scatter(order.values(), mm, alpha=0, color="white")
 
-            red_fact = 0.95  # make the end position shorter
-            _ax.plot(
-                (xx[0], xx[1] * red_fact),
-                (py, py),
-                color="black",
-                linewidth=1.2,
-            )
-            _ax.text(xx[1] * red_fact, py, s=symbol, color="black", ha="center")
+    # # Plot significance bars
+    # # # start at top of the plot and progressively decrease sig. bar downwards
+    py = data[y].max()
+    incr = ylength / 100  # divide yaxis in 100 steps
+    for idx, row in stat.iterrows():
+        p = row[pcol]
+        if (pd.isnull(p) or (p > test_upper_threshold)) and (not plot_non_significant):
             py -= incr
-        _ax.set_ylim(ylim)
-        return (fig, stat) if ax is None else stat
-    return fig if ax is None else None
+            continue
+        symbol = (
+            "**"
+            if p <= test_lower_threshold
+            else "n.s."
+            if ((p > test_upper_threshold) or pd.isnull(p))
+            else "*"
+        )
+        if hue is not None:
+            if row[x] != "-":
+                xx = (order[(row[x], row["A"])], order[(row[x], row["B"])])
+            else:
+                try:
+                    # TODO: get more accurate middle of group
+                    xx = (
+                        order[(row["A"], stat["A"].iloc[-1])] - (1 / nhues),
+                        order[(row["B"], stat["B"].iloc[-1])] - (1 / nhues),
+                    )
+                except KeyError:
+                    # These are the hue groups without contrasting on 'x'
+                    continue
+        else:
+            xx = (order[row["A"]], order[row["B"]])
+
+        _ax.plot(
+            (0.35 + xx[0], 0.35 + xx[1] - 0.25),
+            (py, py),
+            color="black",
+            linewidth=1.2,
+        )
+        _ax.text(xx[1] - 0.025, py, s=symbol, color="black", ha="center")
+        py -= incr
+    _ax.set_ylim(ylim)
+    return (fig, stat) if ax is None else stat
 
 
-def _add_transparency_to_plot(ax: Axis, alpha: float = 0.25, kind: str = "boxen") -> None:
+def _add_transparency_to_plot(
+    ax: Axis, alpha: float = 0.25, kind: str = "boxen"
+) -> None:
 
     objs = (
         (
@@ -387,30 +396,34 @@ def _get_empty_stat_results(
             columns=["A", "B"],
         )
         huestat["Contrast"] = hue
-        to_append = [huestat]
+        huestat[x] = "-"
+        _to_append = [huestat]
         for v in data[x].unique():
             n = huestat.copy()
             n[x] = v
             n["Contrast"] = f"{x} * {hue}"
-            to_append.append(n)
-        stat = (
-            stat.append(to_append, ignore_index=True)
-            .fillna("-")
-            .sort_values([x, "A", "B"])
-        )
+            _to_append.append(n)
+        to_append = pd.concat(_to_append)
+        stat = pd.concat([stat, to_append]).sort_values([x, "A", "B"])
+        stat[x] = stat[x].fillna("-")
     stat["Tested"] = False
     stat["p-unc"] = np.nan
 
     if add_median:
-        mm = data.groupby(x)[y].median().reset_index()
+        _mm = [data.groupby(x)[y].median().reset_index()]
         if hue is not None:
-            mm = mm.rename(columns={x: hue})
-            mm = mm.append(data.groupby(hue)[y].median().reset_index())
+            _mm[0] = _mm[0].rename(columns={x: hue})
+            _mm.append(data.groupby(hue)[y].median().reset_index())
             _p = data.groupby([x, hue])[y].median().reset_index()
             # remove categories if existing (workaround):
             _p = pd.DataFrame(_p.values, index=_p.index, columns=_p.columns)
-            mm = mm.append(_p).fillna("-")
-            # mm = mm.append(data.groupby([x, hue])[y].std().reset_index()).fillna("-")
+            _mm.append(_p)
+        mm = pd.concat(_mm)
+        if mm[x].dtype.name == "category":
+            mm[x] = mm[x].cat.add_categories(["-"]).fillna("-")
+        else:
+            mm[x] = mm[x].fillna("-")
+        # mm = mm.append(data.groupby([x, hue])[y].std().reset_index()).fillna("-")
         for col in ["A", "B"]:
             stat = stat.merge(
                 mm.rename(
