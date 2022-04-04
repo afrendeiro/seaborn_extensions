@@ -186,7 +186,7 @@ def swarmboxenplot(
             stats = stats.reindex(["Variable"] + cols, axis=1)
 
             # If there is just one test per `y` (no hue), correct p-values
-            if stats.shape == len(y):
+            if stats.shape[0] == len(y):
                 stats["p-cor"] = pg.multicomp(
                     stats["p-unc"].values, method=multiple_testing
                 )[1]
