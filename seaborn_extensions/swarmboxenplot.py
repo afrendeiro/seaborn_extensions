@@ -97,7 +97,7 @@ def swarmboxenplot(
     plot_kws: dict
         Additional values to pass to seaborn.boxenplot or seaborn.swarmplot
     test_kws: dict
-        Additional values to pass to pingouin.pairwise_ttests.
+        Additional values to pass to pingouin.pairwise_tests.
         The default is: dict(parametric=False) to run a non-parametric test.
 
     Returns
@@ -247,7 +247,7 @@ def swarmboxenplot(
         y = y2
 
     if test in [True, "t-test", "mann-whitney"]:
-        test_function = pg.pairwise_ttests
+        test_function = pg.pairwise_tests
         if test == "mann-whitney":
             test_kws["parametric"] = False
     elif test in ["kruskal"]:
