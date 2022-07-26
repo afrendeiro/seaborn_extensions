@@ -2,6 +2,7 @@ import typing as tp
 
 import numpy as np
 import matplotlib.pyplot as plt
+import pingouin as pg
 
 from seaborn_extensions.types import Figure, Axis, DataFrame
 from seaborn_extensions.utils import get_grid_dims
@@ -18,15 +19,43 @@ def volcano_plot(
 ) -> Figure:
     """
     Assumes stats dataframe from seaborn_extensions.swarmboxenplot:
-        - "hedges" column has effect size
-        - "p-unc" column has significance
-        - "p-cor" column has significance (multiple test corrected)
-        - A / B -> positive hedges value if A > B.
+        - "hedges/coefs" column with effect sizes
+        - "p-unc/pvalues" column with significance
+        - "p-cor" column with significance corrected for multiple testing (will be added if missing)
+        - "Variable" column with variable names (will use dataframe index if missing)
+        If multiple tests are performed, each will be plotted in a subplot:
+        - "A", "B" group identifiers such that hedges is positive value ~if mean(A) > mean(B).
     """
     if diff_threshold is not None:
         assert n_top is None
     else:
         assert n_top is not None
+
+    if "hedges" not in stats.columns and "coefs" in stats.columns:
+        print("Using columns 'coefs' as effect size estimates.")
+        stats["hedges"] = stats["coefs"]
+    if "p-unc" not in stats.columns and "pvalues" in stats.columns:
+        print("Using columns 'pvalues' as effect size estimates.")
+        stats["p-unc"] = stats["pvalues"]
+    if "p-cor" not in stats.columns:
+        print("Corrected p-values not given, using BH-FDR method.")
+        stats["p-cor"] = pg.multicomp(stats["p-unc"], method="fdr_bh")[1]
+
+    if (stats[["p-unc", "p-cor"]] == 0).any().any():
+        print("p-values include zeros, replacing values around 1e-300 for display.")
+        sel = stats["p-unc"] == 0
+        stats.loc[sel, "p-unc"] = np.exp(-np.random.randint(280, 300, sel.sum())) ** 2.3
+        stats.loc[stats["p-cor"] == 0, "p-cor"] = (
+            np.exp(-np.random.randint(280, 300, sel.sum())) ** 2.3
+        )
+
+    if "Variable" not in stats.columns:
+        print("Using dataframe index as variable names.")
+        stats["Variable"] = stats.index
+
+    for col in ["A", "B"]:
+        if col not in stats.columns:
+            stats[col] = col
 
     stats["A"] = stats["A"].astype(str)
     stats["B"] = stats["B"].astype(str)
