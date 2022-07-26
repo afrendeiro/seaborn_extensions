@@ -1,6 +1,5 @@
-pip
-setuptools_scm
 wheel
+sphinx_rtd_theme
 flake8
 tox
 coverage
