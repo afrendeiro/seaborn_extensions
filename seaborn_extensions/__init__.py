@@ -18,7 +18,7 @@ __author__ = """Andre Rendeiro"""
 __email__ = "afrendeiro@gmail.com"
 
 
-warn_if_outdated("seaborn_extensions", __version__)
+warn_if_outdated("seaborn-extensions", __version__)
 
 
 DEFAULT_CHANNEL_COLORS = [
