@@ -17,6 +17,32 @@ from seaborn_extensions.types import DataFrame, Axis, Figure, Iterables
 from seaborn_extensions.utils import get_grid_dims, filter_kwargs_by_callable
 
 
+"""
+# Demo with various tests available in Pingouin:
+data = pd.DataFrame(
+    {"cont": np.random.random(20), "cat": np.random.choice(["a", "b"], 20)}
+)
+data.loc[data["cat"] == "b", "cont"] *= 5
+x = 'cat'
+y = 'cont'
+
+fig, stats = swarmboxenplot(data=data, x='x', y='y', hue='h')
+
+fig, stats = swarmboxenplot(data=data, x=x, y=y)
+
+pg.ttest(*data.groupby(x)[y].apply(lambda x: list(x)))
+pg.mwu(*data.groupby(x)[y].apply(lambda x: list(x)))
+pg.kruskal(data=data, between=x, dv=y)
+pg.pairwise_ttests(data=data, between=x, dv=y, parametric=True)  # same as T-test
+pg.pairwise_ttests(data=data, between=x, dv=y, parametric=False)  # same as MWU
+
+c = data[x].astype(pd.CategoricalDtype())
+pg.linear_regression(pd.concat((c[col].cat.codes.rename(col) for col in c), axis=1), data[y])
+pg.linear_regression(pd.get_dummies(c), data[y])
+pg.logistic_regression(data[y], c.cat.codes)
+"""
+
+
 def swarmboxenplot(
     data: DataFrame,
     x: str,
@@ -26,6 +52,7 @@ def swarmboxenplot(
     boxen: bool = True,
     bar: bool = False,
     orient: str = "vertical",
+    plot: bool = True,
     ax: tp.Union[Axis, tp.Sequence[Axis]] = None,
     test: tp.Union[bool, str] = "mann-whitney",
     to_test: str = "all",
@@ -137,19 +164,22 @@ def swarmboxenplot(
     data = data.sort_values([x] + ([hue] if hue is not None else []))
 
     if isinstance(y, (list, pd.Series, pd.Index)):
-        # TODO: display only one legend for hue
-        if ax is None:
-            n, m = get_grid_dims(y)
-            default_fig_kws = dict(
-                nrows=n, ncols=m, figsize=(m * 4, n * 4), sharex=True, squeeze=False
-            )
-            default_fig_kws.update(fig_kws or {})
-            fig, axes = plt.subplots(**default_fig_kws)
-            axes = axes.flatten()
-        elif isinstance(ax, np.ndarray):
-            axes = ax.flatten()
-        elif isinstance(ax, matplotlib.axes.Axes):
-            axes = np.asarray([ax])
+        if plot:
+            # TODO: display only one legend for hue
+            if ax is None:
+                n, m = get_grid_dims(y)
+                default_fig_kws = dict(
+                    nrows=n, ncols=m, figsize=(m * 4, n * 4), sharex=True, squeeze=False
+                )
+                default_fig_kws.update(fig_kws or {})
+                fig, axes = plt.subplots(**default_fig_kws)
+                axes = axes.flatten()
+            elif isinstance(ax, np.ndarray):
+                axes = ax.flatten()
+            elif isinstance(ax, matplotlib.axes.Axes):
+                axes = np.asarray([ax])
+        else:
+            axes = [None] * len(y)
 
         _stats = list()
         idx = -1
@@ -164,6 +194,7 @@ def swarmboxenplot(
                 boxen=boxen,
                 bar=bar,
                 orient=orient,
+                plot=plot,
                 ax=_ax,
                 test=test,
                 to_test=to_test,
@@ -174,12 +205,14 @@ def swarmboxenplot(
                 plot_kws=plot_kws,
                 test_kws=test_kws,
             )
-            _ax.set(title=_var + _ax.get_title(), xlabel=None, ylabel=None)
+            if plot:
+                _ax.set(title=_var + _ax.get_title(), xlabel=None, ylabel=None)
             if test is not False:
                 _stats.append(s.assign(Variable=_var))
         # "close" excess subplots
-        for _ax in axes[idx + 1 :]:
-            _ax.axis("off")
+        if plot:
+            for _ax in axes[idx + 1 :]:
+                _ax.axis("off")
         if test is not False:
             stats = pd.concat(_stats).reset_index(drop=True)
             cols = [c for c in stats.columns if c != "Variable"]
@@ -188,19 +221,14 @@ def swarmboxenplot(
             # If there is just one test per `y` (no hue), correct p-values
             if stats.shape[0] == len(y):
                 stats["p-cor"] = pg.multicomp(
-                    stats["p-unc"].values, method=multiple_testing
+                    stats["p-unc"].tolist(), method=multiple_testing
                 )[1]
         if ax is None:
-            return (fig, stats) if test else fig
+            return stats if not plot else (fig, stats) if test else fig
         return stats if test else None
 
     if data[y].dtype.name in ["category", "string", "object"]:
         raise ValueError("`y` variable must be numeric.")
-
-    if ax is None:
-        fig, _ax = plt.subplots(1, 1, figsize=(4, 4))
-    else:
-        _ax = ax
 
     horizontal = orient in ["horizontal", "horiz", "h"]
     if horizontal:
@@ -210,31 +238,39 @@ def swarmboxenplot(
         y = y2
 
     # Plot vanilla seaborn
-    if boxen:
-        assert not bar
-        # Tmp fix for lack of support for Pandas Int64 in boxenplot:
-        if data[y].dtype.name == "Int64":
-            data[y] = data[y].astype(float)
-        boxen_kws = filter_kwargs_by_callable(plot_kws, sns.boxenplot)
-        sns.boxenplot(data=data, x=x, y=y, hue=hue, ax=_ax, **boxen_kws)
-    if bar:
-        assert not boxen
-        bar_kws = filter_kwargs_by_callable(plot_kws, sns.barplot)
-        sns.barplot(data=data, x=x, y=y, hue=hue, ax=_ax, **bar_kws)
+    if plot:
+        if ax is None:
+            default_fig_kws = dict(figsize=(4, 4))
+            default_fig_kws.update(fig_kws or {})
+            fig, _ax = plt.subplots(**default_fig_kws)
+        else:
+            _ax = ax
 
-    if (boxen or bar) and swarm:
-        _add_transparency_to_plot(_ax, kind="bar" if bar else "boxen")
-    if swarm:
-        swarm_kws = filter_kwargs_by_callable(plot_kws, sns.swarmplot)
-        if hue is not None and "dodge" not in swarm_kws:
-            swarm_kws["dodge"] = True
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning)
-            sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **swarm_kws)
-    if horizontal:
-        _ax.set_yticklabels(_ax.get_yticklabels(), rotation=0, ha="right")
-    else:
-        _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90, ha="right")
+        if boxen:
+            assert not bar
+            # Tmp fix for lack of support for Pandas Int64 in boxenplot:
+            if data[y].dtype.name == "Int64":
+                data[y] = data[y].astype(float)
+            boxen_kws = filter_kwargs_by_callable(plot_kws, sns.boxenplot)
+            sns.boxenplot(data=data, x=x, y=y, hue=hue, ax=_ax, **boxen_kws)
+        if bar:
+            assert not boxen
+            bar_kws = filter_kwargs_by_callable(plot_kws, sns.barplot)
+            sns.barplot(data=data, x=x, y=y, hue=hue, ax=_ax, **bar_kws)
+
+        if (boxen or bar) and swarm:
+            _add_transparency_to_plot(_ax, kind="bar" if bar else "boxen")
+        if swarm:
+            swarm_kws = filter_kwargs_by_callable(plot_kws, sns.swarmplot)
+            if hue is not None and "dodge" not in swarm_kws:
+                swarm_kws["dodge"] = True
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning)
+                sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **swarm_kws)
+        if horizontal:
+            _ax.set_yticklabels(_ax.get_yticklabels(), rotation=0, ha="right")
+        else:
+            _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90, ha="right")
 
     if test is False:
         return fig if ax is None else None
@@ -266,8 +302,9 @@ def swarmboxenplot(
     datat = datat.loc[datat[x].isin(keep), :]
     if datat[x].dtype.name == "category":
         datat[x] = datat[x].cat.remove_unused_categories()
-    ylim = _ax.get_ylim()  # save original axis boundaries for later
-    ylength = abs(ylim[1]) + (abs(ylim[0]) if ylim[0] < 0 else 0)
+    if plot:
+        ylim = _ax.get_ylim()  # save original axis boundaries for later
+        ylength = abs(ylim[1]) + (abs(ylim[0]) if ylim[0] < 0 else 0)
 
     # # Now calculate stats
     # # # get empty dataframe in case nothing can be calculated
@@ -333,6 +370,9 @@ def swarmboxenplot(
         pcol = "p-cor"
     else:
         pcol = "p-unc"
+
+    if not plot:
+        return stat
 
     # Plot
     # # This ensures there is a point for each `x` class and keep the order correct for below
