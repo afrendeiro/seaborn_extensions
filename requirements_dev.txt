@@ -6,3 +6,4 @@ coverage
 Sphinx
 twine
 pytest>=6.2.0,<7.0
+watchdog

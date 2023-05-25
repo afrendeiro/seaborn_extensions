@@ -47,9 +47,11 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
 
-clean-docs: ## remove build artifacts
+clean-docs: ## remove documentation artifacts
 	rm -fr docs/_build
 	rm -fr ~/seaborn_extensions_docs/
+	rm -f docs/modules.rst
+	rm -f docs/seaborn_extensions.rst
 
 lint: ## check style with flake8
 	flake8 seaborn_extensions tests
