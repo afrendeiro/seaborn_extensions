@@ -1,6 +1,8 @@
 Welcome to seaborn_extensions's documentation!
 ======================================
 
+.. include:: ../README.rst
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
@@ -8,7 +10,7 @@ Welcome to seaborn_extensions's documentation!
    readme
    installation
    usage
-   modules
+   api
    contributing
    authors
    changelog

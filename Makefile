@@ -26,7 +26,7 @@ BROWSER := python -c "$$BROWSER_PYSCRIPT"
 help:
 	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
 
-clean: clean-build clean-pyc clean-test ## remove all build, test, coverage and Python artifacts
+clean: clean-build clean-pyc clean-test clean-docs ## remove all build, test, coverage, Python artifacts, docs
 
 clean-build: ## remove build artifacts
 	rm -fr build/
@@ -47,6 +47,10 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
 
+clean-docs: ## remove build artifacts
+	rm -fr docs/_build
+	rm -fr ~/seaborn_extensions_docs/
+
 lint: ## check style with flake8
 	flake8 seaborn_extensions tests
 
@@ -62,13 +66,14 @@ coverage: ## check code coverage quickly with the default Python
 	coverage html
 	$(BROWSER) htmlcov/index.html
 
-docs: ## generate Sphinx HTML documentation, including API docs
+docs: clean-docs ## generate Sphinx HTML documentation, including API docs
 	rm -f docs/seaborn_extensions.rst
 	rm -f docs/modules.rst
 	sphinx-apidoc -o docs/ seaborn_extensions
 	$(MAKE) -C docs clean
 	$(MAKE) -C docs html
-	$(BROWSER) docs/_build/html/index.html
+	cp -r docs/_build/html ~/seaborn_extensions_docs  # to work with containerized browsers
+	$(BROWSER) ~/seaborn_extensions_docs/index.html
 
 servedocs: docs ## compile the docs watching for changes
 	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .

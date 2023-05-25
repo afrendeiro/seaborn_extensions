@@ -19,18 +19,24 @@ from seaborn_extensions.utils import get_grid_dims, filter_kwargs_by_callable
 
 
 """
+import pandas as pd
+import pingouin as pg
+from seaborn_extensions import swarmboxenplot
 # Demo with various tests available in Pingouin:
 data = pd.DataFrame(
     {"cont": np.random.random(20), "cat": np.random.choice(["a", "b"], 20)}
 )
 data.loc[data["cat"] == "b", "cont"] *= 5
+fig, stats = swarmboxenplot(data=data, x='cat', y='cont')
+data['h'] = ['cl_1'] * 10 + ['cl_2'] * 10
+fig, stats = swarmboxenplot(data=data, x='cat', y='cont', hue='h')
+
+data['cont1'] = data['cont'] + np.random.random(20)
+data['cont2'] = data['cont'] + np.random.random(20)
+fig, stats = swarmboxenplot(data=data, x='cat', y=['cont1', 'cont2'], hue='h')
+
 x = 'cat'
 y = 'cont'
-
-fig, stats = swarmboxenplot(data=data, x='x', y='y', hue='h')
-
-fig, stats = swarmboxenplot(data=data, x=x, y=y)
-
 pg.ttest(*data.groupby(x)[y].apply(lambda x: list(x)))
 pg.mwu(*data.groupby(x)[y].apply(lambda x: list(x)))
 pg.kruskal(data=data, between=x, dv=y)

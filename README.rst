@@ -5,9 +5,6 @@ seaborn_extensions
 .. image:: https://img.shields.io/pypi/v/seaborn_extensions.svg
         :target: https://pypi.python.org/pypi/seaborn_extensions
 
-.. image:: https://img.shields.io/travis/afrendeiro/seaborn_extensions.svg
-        :target: https://travis-ci.com/afrendeiro/seaborn_extensions
-
 .. image:: https://readthedocs.org/projects/seaborn-extensions/badge/?version=latest
         :target: https://seaborn-extensions.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
@@ -25,6 +22,17 @@ Features
 
 * swarmboxenplot: Overlayed swarm- and boxen-plots with significance bars between groups.
 * clustermap: The great clustermap but with easy annotation of rows and columns for numeric and categorical factors.
+* volcano_plot: A volcano plot with great defaults.
+* rankplot: A simple rank vs value plot, also known as a waterfall plot.
+
+
+Installation
+------------
+
+To install seaborn_extensions, simply use pip::
+
+        pip install seaborn_extensions
+
 
 Credits
 -------
