@@ -12,6 +12,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pingouin as pg
+from tqdm import tqdm as _tqdm
 
 from seaborn_extensions.types import DataFrame, Axis, Figure, Iterables
 from seaborn_extensions.utils import get_grid_dims, filter_kwargs_by_callable
@@ -47,7 +48,7 @@ def swarmboxenplot(
     data: DataFrame,
     x: str,
     y: tp.Union[str, Iterables],
-    hue: str = None,
+    hue: tp.Optional[str] = None,
     swarm: bool = True,
     boxen: bool = True,
     bar: bool = False,
@@ -60,9 +61,10 @@ def swarmboxenplot(
     test_upper_threshold: float = 0.05,
     test_lower_threshold: float = 0.01,
     plot_non_significant: bool = False,
-    plot_kws: tp.Dict[str, tp.Any] = None,
-    test_kws: tp.Dict[str, tp.Any] = None,
-    fig_kws: tp.Dict[str, tp.Any] = None,
+    plot_kws: tp.Optional[tp.Dict[str, tp.Any]] = None,
+    test_kws: tp.Optional[tp.Dict[str, tp.Any]] = None,
+    fig_kws: tp.Optional[tp.Dict[str, tp.Any]] = None,
+    tqdm: tp.Union[bool, tp.Dict[str, tp.Any]] = True,
 ) -> tp.Optional[tp.Union[Figure, DataFrame, tp.Tuple[Figure, DataFrame]]]:
     """
     A categorical plot that overlays individual observations
@@ -126,6 +128,9 @@ def swarmboxenplot(
     test_kws: dict
         Additional values to pass to pingouin.pairwise_tests.
         The default is: dict(parametric=False) to run a non-parametric test.
+    tqdm: bool, dict
+        Additional values to pass to pingouin.pairwise_tests.
+        The default is: dict(parametric=False) to run a non-parametric test.
 
     Returns
     -------
@@ -159,7 +164,18 @@ def swarmboxenplot(
     if test_kws is None:
         test_kws = dict()
     if plot_kws is None:
-        plot_kws = dict()
+        plot_kws = dict(palette="tab10")
+    if isinstance(tqdm, bool):
+        tqdm_kws = dict(
+            disable=not tqdm, total=len(y) if not isinstance(y, str) else 1, desc="y"
+        )
+    else:
+        tqdm_kws = tqdm
+        tqdm_kws["disable"] = False
+        kw = dict(total=len(y) if not isinstance(y, str) else 1, desc="y")
+        for k, v in kw.items():
+            if k not in tqdm_kws:
+                tqdm_kws[k] = v
 
     data = data.sort_values([x] + ([hue] if hue is not None else []))
 
@@ -183,7 +199,7 @@ def swarmboxenplot(
 
         _stats = list()
         idx = -1
-        for idx, _var in enumerate(y):
+        for idx, _var in _tqdm(enumerate(y), **tqdm_kws):
             _ax = axes[idx]
             s: DataFrame = swarmboxenplot(
                 data=data,
@@ -266,7 +282,16 @@ def swarmboxenplot(
                 swarm_kws["dodge"] = True
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", category=UserWarning)
-                sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax, **swarm_kws)
+                sns.swarmplot(
+                    data=data,
+                    x=x,
+                    y=y,
+                    # use `hue` as `x` to have scatter colored accordingly
+                    hue=hue if hue is not None else x,
+                    legend="auto" if hue is not None else False,
+                    ax=_ax,
+                    **swarm_kws,
+                )
         if horizontal:
             _ax.set_yticklabels(_ax.get_yticklabels(), rotation=0, ha="right")
         else:
@@ -443,7 +468,6 @@ def swarmboxenplot(
 def _add_transparency_to_plot(
     ax: Axis, alpha: float = 0.25, kind: str = "boxen"
 ) -> None:
-
     objs = (
         (
             matplotlib.collections.PatchCollection,
