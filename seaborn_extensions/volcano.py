@@ -59,9 +59,12 @@ def volcano_plot(
 
     stats["A"] = stats["A"].astype(str)
     stats["B"] = stats["B"].astype(str)
+    # Fix for matplotlib not supporting pandas Float64 type yet
+    stats["hedges"] = stats["hedges"].astype(float)
+
     combs = stats[["A", "B"]].drop_duplicates().reset_index(drop=True)
     if invert_direction:
-        stats["hedges"] *= -1  # convert to B / A which is often more intuitive
+        stats["hedges"] *= -1.0  # convert to B / A which is often more intuitive
     stats["logp-unc"] = -np.log10(stats["p-unc"].fillna(1))
     stats["logp-cor"] = -np.log10(stats["p-cor"].fillna(1))
     stats["p-cor-plot"] = (stats["logp-cor"] / stats["logp-cor"].max()).fillna(1) * 5
