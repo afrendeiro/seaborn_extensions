@@ -13,7 +13,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from seaborn_extensions import SEQUENCIAL_CMAPS
+from seaborn_extensions import SEQUENTIAL_CMAPS
 from seaborn_extensions.types import Series, DataFrame, Array, Figure
 from seaborn_extensions.utils import (
     minmax_scale,
@@ -217,7 +217,7 @@ def _add_extra_colorbars_to_clustermap(
     if isinstance(datas, pd.Series):
         datas = datas.to_frame()
     if cmaps is None:
-        cmaps = SEQUENCIAL_CMAPS[offset:]
+        cmaps = SEQUENTIAL_CMAPS[offset:]
     if isinstance(cmaps, str):
         cmaps = [cmaps]
 

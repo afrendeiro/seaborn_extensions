@@ -11,7 +11,7 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 
-from seaborn_extensions import SEQUENCIAL_CMAPS
+from seaborn_extensions import SEQUENTIAL_CMAPS
 from seaborn_extensions.types import Array, Series, DataFrame
 
 
@@ -37,13 +37,11 @@ def filter_kwargs_by_callable(
 
 
 @tp.overload
-def minmax_scale(x: Array) -> Array:
-    ...
+def minmax_scale(x: Array) -> Array: ...
 
 
 @tp.overload
-def minmax_scale(x: DataFrame) -> DataFrame:
-    ...
+def minmax_scale(x: DataFrame) -> DataFrame: ...
 
 
 def minmax_scale(x: tp.Union[Array, DataFrame]) -> tp.Union[Array, DataFrame]:
@@ -96,21 +94,17 @@ def close_plots(func: tp.Callable) -> None:
 def is_numeric(x: tp.Union[Series, tp.Any]) -> bool:
     if not isinstance(x, pd.Series):
         x = pd.Series(x)
-    if (
-        x.dtype.name
-        in [
-            "float",
-            "float32",
-            "float64",
-            "int",
-            "int8",
-            "int16",
-            "int32",
-            "int64",
-            "Int64",
-        ]
-        or is_datetime(x)
-    ):
+    if x.dtype.name in [
+        "float",
+        "float32",
+        "float64",
+        "int",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "Int64",
+    ] or is_datetime(x):
         return True
     if x.dtype.name in ["object", "string", "boolean", "bool"]:
         return False
@@ -208,7 +202,7 @@ def get_n_colors(n: int, max_value: float = 1.0) -> Array:
         http://en.wikipedia.org/wiki/1/2_%2B_1/4_%2B_1/8_%2B_1/16_%2B_%C2%B7_%C2%B7_%C2%B7
         """
         for k in itertools.count():
-            yield Fraction(1, 2 ** k)
+            yield Fraction(1, 2**k)
 
     def fracs():
         """
@@ -295,7 +289,7 @@ def to_color_dataframe(
         x = x.to_frame()
     if cmaps is None:
         # the offset is in order to get different colors for rows and columns by default
-        cmaps = [plt.get_cmap(cmap) for cmap in SEQUENCIAL_CMAPS[offset:]]
+        cmaps = [plt.get_cmap(cmap) for cmap in SEQUENTIAL_CMAPS[offset:]]
     if isinstance(cmaps, str):
         cmaps = [cmaps]
     return pd.concat(
