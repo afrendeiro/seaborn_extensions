@@ -2,7 +2,6 @@
 A replacement of seaborn.clustermap with additional features.
 """
 
-
 import typing as tp
 from typing import Optional, List, Union, Callable
 import warnings
@@ -37,7 +36,9 @@ def clustermap(*args, **kwargs):
     else:
         if "square" in kwargs:
             if kwargs["square"] is True:
-                print("`square` shape requested but `figsize` given. Ignoring `figsize`.")
+                print(
+                    "`square` shape requested but `figsize` given. Ignoring `figsize`."
+                )
     if kwargs["figsize"] == (10, 10):  # default value
         # assumes pivot_kws is not used...
         # would depend on x/y-ticklabel size...
@@ -142,8 +143,21 @@ def clustermap(*args, **kwargs):
         assert "annot" not in kwargs, "If providing p-values, `annot` cannot be used!"
         p = kwargs["pvalues"]
         # TODO: allow custom thresholds
-        p = ((p < 0.05) & (p > 0.01)).replace({True: 1}) + ((p < 0.01)).replace({True: 2})
+        if "first_pvalue_threshold" not in kwargs:
+            kwargs["first_pvalue_threshold"] = 0.05
+        if "second_pvalue_threshold" not in kwargs:
+            kwargs["second_pvalue_threshold"] = 0.01
+        p = (
+            (p < kwargs["first_pvalue_threshold"])
+            & (p > kwargs["second_pvalue_threshold"])
+        ).replace({True: 1}) + ((p < kwargs["second_pvalue_threshold"])).replace(
+            {True: 2}
+        )
+
         kwargs["annot"] = p
+        del kwargs["pvalues"]
+        del kwargs["first_pvalue_threshold"]
+        del kwargs["second_pvalue_threshold"]
 
     # Call original function
     grid = sns.clustermap(*args, **kwargs)
