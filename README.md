@@ -1,8 +1,7 @@
-## seaborn_extensions
+seaborn_extensions
+==================
 
-**==================**
-
-**My collection of general plotting functions that I build on top of seaborn.**
+**A collection of general plotting functions for biology built on top of seaborn.**
 
 * Free software: GNU General Public License v3
 * Documentation: [https://seaborn-extensions.readthedocs.io](https://seaborn-extensions.readthedocs.io)
