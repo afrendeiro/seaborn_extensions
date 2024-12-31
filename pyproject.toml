@@ -1,0 +1,63 @@
+[project]
+name = "seaborn_extensions"
+description = "Extensions of seaborn plots for biology"
+license = {text = "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"}
+authors = [
+    {name = "Andre Rendeiro", email = "afrendeiro@gmail.com"},
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+keywords = ["seaborn_extensions"]
+dynamic = ['version']
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.18.0,<2.0",
+    "pandas",
+    "matplotlib>=3.3.0,<4.0",
+    "seaborn>=0.11.1,<1.0",
+    "pingouin>=0.5.2,<1.0",
+    "tqdm",
+    "outdated"
+]
+
+[project.optional-dependencies]
+dev = [
+    "wheel",
+    "sphinx_rtd_theme",
+    "flake8",
+    "tox",
+    "coverage",
+    "Sphinx",
+    "twine",
+    "pytest>=6.2.0,<7.0",
+    "watchdog",
+]
+
+[project.urls]
+homepage = "https://github.com/afrendeiro/seaborn_extensions"
+documentation = "https://github.com/afrendeiro/seaborn_extensions/blob/main/README.md"
+repository = "https://github.com/afrendeiro/seaborn_extensions"
+
+[build-system]
+requires = ["setuptools_scm[toml]>=6.0"]
+backend = "setuptools.build_meta"
+
+[tool.setuptools]
+license-files = []  # https://github.com/astral-sh/uv/issues/9513
+
+[tool.setuptools_scm]
+write_to = "seaborn_extensions/_version.py"
+write_to_template = 'version = __version__ = "{version}"'
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+

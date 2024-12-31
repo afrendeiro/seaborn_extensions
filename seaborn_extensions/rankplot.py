@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 # from plottify import autosize
 
-from seaborn_extensions.types import Figure, Axis, Series
+from seaborn_extensions._types import Figure, Axis, Series
 
 
 def rankplot(

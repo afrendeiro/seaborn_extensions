@@ -12,7 +12,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 from seaborn_extensions import SEQUENTIAL_CMAPS
-from seaborn_extensions.types import Array, Series, DataFrame
+from seaborn_extensions._types import Array, Series, DataFrame
 
 
 def is_documented_by(original):
