@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pingouin as pg
 
-from seaborn_extensions.types import Figure, Axis, DataFrame
-from seaborn_extensions.utils import get_grid_dims
+from seaborn_extensions._types import Figure, Axis, DataFrame
+from seaborn_extensions._utils import get_grid_dims
 
 
 def volcano_plot(

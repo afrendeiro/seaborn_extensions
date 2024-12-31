@@ -14,8 +14,8 @@ import seaborn as sns
 import pingouin as pg
 from tqdm import tqdm as _tqdm
 
-from seaborn_extensions.types import DataFrame, Axis, Figure, Iterables
-from seaborn_extensions.utils import get_grid_dims, filter_kwargs_by_callable
+from seaborn_extensions._types import DataFrame, Axis, Figure, Iterables
+from seaborn_extensions._utils import get_grid_dims, filter_kwargs_by_callable
 
 
 """
@@ -374,9 +374,7 @@ def swarmboxenplot(
         symbol = (
             "**"
             if p <= test_lower_threshold
-            else "n.s."
-            if ((p > test_upper_threshold) or pd.isnull(p))
-            else "*"
+            else "n.s." if ((p > test_upper_threshold) or pd.isnull(p)) else "*"
         )
         _ax.set_title(symbol)
         return (fig, _stat) if ax is None else _stat
@@ -432,9 +430,7 @@ def swarmboxenplot(
         symbol = (
             "**"
             if p <= test_lower_threshold
-            else "n.s."
-            if ((p > test_upper_threshold) or pd.isnull(p))
-            else "*"
+            else "n.s." if ((p > test_upper_threshold) or pd.isnull(p)) else "*"
         )
         if hue is not None:
             if row[x] != "-":

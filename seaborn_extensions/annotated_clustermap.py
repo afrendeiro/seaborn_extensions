@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from seaborn_extensions import SEQUENTIAL_CMAPS
-from seaborn_extensions.types import Series, DataFrame, Array, Figure
-from seaborn_extensions.utils import (
+from seaborn_extensions._types import Series, DataFrame, Array, Figure
+from seaborn_extensions._utils import (
     minmax_scale,
     is_numeric,
     is_datetime,
