@@ -31,7 +31,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "wheel",
+    "ipython",
     "sphinx_rtd_theme",
     "flake8",
     "tox",

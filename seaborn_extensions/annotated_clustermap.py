@@ -51,6 +51,11 @@ def clustermap(*args, **kwargs):
         kwargs["xticklabels"] = data.shape[1] < max_items
     if "yticklabels" not in kwargs:
         kwargs["yticklabels"] = data.shape[0] < max_items
+    # TODO: document custom thresholds
+    if "first_pvalue_threshold" not in kwargs:
+        kwargs["first_pvalue_threshold"] = 0.05
+    if "second_pvalue_threshold" not in kwargs:
+        kwargs["second_pvalue_threshold"] = 0.01
 
     # dendrogram aspect ratio
     d = 0.1
@@ -138,26 +143,19 @@ def clustermap(*args, **kwargs):
                 )
 
     # Add p-value annotation
-    # TODO: document
+    add_stars = False
     if "pvalues" in kwargs:
         assert "annot" not in kwargs, "If providing p-values, `annot` cannot be used!"
-        p = kwargs["pvalues"]
-        # TODO: allow custom thresholds
-        if "first_pvalue_threshold" not in kwargs:
-            kwargs["first_pvalue_threshold"] = 0.05
-        if "second_pvalue_threshold" not in kwargs:
-            kwargs["second_pvalue_threshold"] = 0.01
-        p = (
-            (p < kwargs["first_pvalue_threshold"])
-            & (p > kwargs["second_pvalue_threshold"])
-        ).replace({True: 1}) + ((p < kwargs["second_pvalue_threshold"])).replace(
-            {True: 2}
-        )
-
-        kwargs["annot"] = p
+        add_stars = True
+        p = kwargs["pvalues"].reindex_like(data)
+        scores = p.copy()
+        scores.values[p < kwargs["first_pvalue_threshold"]] = 1
+        scores.values[p < kwargs["second_pvalue_threshold"]] = 2
+        scores.values[p > kwargs["first_pvalue_threshold"]] = 0
+        kwargs["annot"] = scores.astype(int)
         del kwargs["pvalues"]
-        del kwargs["first_pvalue_threshold"]
-        del kwargs["second_pvalue_threshold"]
+    del kwargs["first_pvalue_threshold"]
+    del kwargs["second_pvalue_threshold"]
 
     # Call original function
     grid = sns.clustermap(*args, **kwargs)
@@ -173,7 +171,7 @@ def clustermap(*args, **kwargs):
     ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
 
     # Convert numeric p-value annotation to text
-    if "pvalues" in kwargs:
+    if add_stars:
         r = {"0": "", "1": "*", "2": "**"}
         for c in ax.get_children():
             if isinstance(c, matplotlib.text.Text):
@@ -347,6 +345,14 @@ def _add_docs_to_clustermap():
         Values p >= 0.05 will not be labeled.
         This will be overlaid as text on top of the heatmap.
         If providing `pvalues`, `annot` cannot be used.
+    first_pvalue_threshold: float
+        EXTENSION!
+        The threshold for the first p-value in the pvalues dataframe. Default is 0.05.
+        Values under this threshold will be labeled with one asterisk "*".
+    second_pvalue_threshold: float
+        EXTENSION!
+        The threshold for the second p-value in the pvalues dataframe. Default is 0.01.
+        Values under this threshold will be labeled with two asterisks "**".
     square: bool, optional
         EXTENSION!
         Try to make the shape of the figure as square as possible.
